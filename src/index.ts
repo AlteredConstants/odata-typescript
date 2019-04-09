@@ -1,4 +1,5 @@
 import { removeSync } from "fs-extra"
+import { join, resolve } from "path"
 import {
   Directory,
   InterfaceDeclarationStructure,
@@ -14,38 +15,11 @@ import {
   parse,
 } from "./parse-metadata"
 
-// import { writeFileSync } from 'fs'
-// import { format } from 'prettier'
-
-removeSync("./build")
-
+const buildPath = resolve(__dirname, "../build")
+const basePath = resolve(__dirname, "base")
+const baseConstantPath = join(basePath, "constant.ts")
+const baseEdmPath = join(basePath, "edm.ts")
 const constantNamespace = "Constant"
-
-// function mapType(type: string): string {
-//   switch (type) {
-//     case 'Edm.Boolean':
-//       return 'boolean'
-//     case 'Edm.Byte':
-//     case 'Edm.SByte':
-//     case 'Edm.Int16':
-//     case 'Edm.Int32':
-//     case 'Edm.Int64':
-//     case 'Edm.Single':
-//     case 'Edm.Double':
-//     case 'Edm.Decimal':
-//       return 'number'
-//     case 'Edm.Binary':
-//     case 'Edm.Date':
-//     case 'Edm.DateTimeOffset':
-//     case 'Edm.Duration':
-//     case 'Edm.Guid':
-//     case 'Edm.TimeOfDay':
-//     case 'Edm.String':
-//       return 'string'
-//     default:
-//       return type
-//   }
-// }
 
 function getType(property: ODataProperty): string {
   const type = property.type.replace(/^Collection\((.*)\)$/, "Array<$1>")
@@ -147,26 +121,21 @@ function createSchemaFile(
   return schemaFile
 }
 
-async function run() {
-  const metadataFilePath = process.argv[2]
+async function run(metadataFilePath: string) {
+  removeSync(buildPath)
 
   const project = new Project()
-  const buildDirectory = project.createDirectory("./build")
+  const buildDirectory = project.createDirectory(buildPath)
 
   const constantFile = project
-    .addExistingSourceFile("./base/constant.ts")
+    .addExistingSourceFile(baseConstantPath)
     .copyToDirectory(buildDirectory)
   const edmFile = project
-    .addExistingSourceFile("./base/edm.ts")
+    .addExistingSourceFile(baseEdmPath)
     .copyToDirectory(buildDirectory)
   const indexFile = buildDirectory.createSourceFile("index.ts")
 
   const parsedValue = await parse(metadataFilePath)
-
-  // writeFileSync(
-  //   metadataFilePath.replace(/\.xml$/, '') + '.json',
-  //   format(JSON.stringify(parsedValue), { parser: 'json' }),
-  // )
 
   const metadata = await decode(parsedValue)
   const schemas = metadata.schemas.filter(s => s.entities)
@@ -206,4 +175,4 @@ async function run() {
   await project.save()
 }
 
-run().catch(error => console.error(error))
+run(process.argv[2]).catch(error => console.error(error))
