@@ -4,7 +4,8 @@
   "author": "Zeff Svoboda",
   "license": "MIT",
   "scripts": {
-    "build": "ts-node src/"
+    "build": "ts-node src/",
+    "lint": "eslint \"src/**\""
   },
   "dependencies": {
     "@types/fs-extra": "^5.0.5",
@@ -21,6 +22,10 @@
     "xml2js": "^0.4.19"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^1.6.0",
+    "@typescript-eslint/parser": "^1.6.0",
+    "eslint": "^5.16.0",
+    "eslint-config-prettier": "^4.1.0",
     "prettier": "^1.16.4",
     "ts-node": "^8.0.3",
     "typescript": "^3.4.2"

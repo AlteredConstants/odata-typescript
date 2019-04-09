@@ -121,7 +121,7 @@ function createSchemaFile(
   return schemaFile
 }
 
-async function run(metadataFilePath: string) {
+async function run(metadataFilePath: string): Promise<void> {
   removeSync(buildPath)
 
   const project = new Project()
@@ -175,4 +175,5 @@ async function run(metadataFilePath: string) {
   await project.save()
 }
 
+// eslint-disable-next-line no-console
 run(process.argv[2]).catch(error => console.error(error))
