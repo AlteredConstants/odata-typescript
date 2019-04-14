@@ -3,7 +3,6 @@ import * as t from "io-ts"
 import { BooleanFromString, IntegerFromString } from "io-ts-types"
 import { NonEmptyString } from "io-ts-types/lib/NonEmptyString"
 import { PathReporter } from "io-ts/lib/PathReporter"
-import { isNil } from "lodash"
 import { promisify } from "util"
 import { parseString as parseXmlString } from "xml2js"
 
@@ -31,11 +30,22 @@ export interface ODataEnum {
   members: ODataEnumMember[]
 }
 
+export interface ODataEntitySet {
+  name: string
+  entityType: string
+}
+
+export interface ODataEntityContainer {
+  name: string
+  entitySets: ODataEntitySet[]
+}
+
 export interface ODataSchema {
   namespace: string
   entityTypes: ODataEntity[]
   complexTypes: ODataEntity[]
   enumTypes: ODataEnum[]
+  entityContainer: ODataEntityContainer | null
 }
 
 export interface ODataMetadata {
@@ -112,6 +122,24 @@ const XmlODataEnumType = t.intersection([
   }),
 ])
 
+const XmlODataEntitySet = t.type({
+  $: t.type({
+    Name: NonEmptyString,
+    EntityType: NonEmptyString,
+  }),
+})
+
+const XmlODataEntityContainer = t.intersection([
+  t.type({
+    $: t.type({
+      Name: NonEmptyString,
+    }),
+  }),
+  t.partial({
+    EntitySet: t.array(XmlODataEntitySet),
+  }),
+])
+
 const XmlODataSchema = t.intersection([
   t.type({
     $: t.type({
@@ -122,6 +150,7 @@ const XmlODataSchema = t.intersection([
     EntityType: t.array(XmlODataEntityType),
     ComplexType: t.array(XmlODataComplexType),
     EnumType: t.array(XmlODataEnumType),
+    EntityContainer: t.tuple([XmlODataEntityContainer]),
   }),
 ])
 
@@ -167,7 +196,7 @@ function getEnumMember(
 ): ODataEnumMember {
   return {
     name: member.$.Name,
-    value: isNil(member.$.Value) ? index : member.$.Value,
+    value: member.$.Value === undefined ? index : member.$.Value,
   }
 }
 
@@ -178,12 +207,33 @@ function getEnum(enumType: t.TypeOf<typeof XmlODataEnumType>): ODataEnum {
   }
 }
 
+function getEntitySet(set: t.TypeOf<typeof XmlODataEntitySet>): ODataEntitySet {
+  return {
+    name: set.$.Name,
+    entityType: set.$.EntityType,
+  }
+}
+
+function getEntityContainer(
+  container: t.TypeOf<typeof XmlODataEntityContainer>,
+): ODataEntityContainer {
+  return {
+    name: container.$.Name,
+    entitySets: container.EntitySet
+      ? container.EntitySet.map(getEntitySet)
+      : [],
+  }
+}
+
 function getSchema(schema: t.TypeOf<typeof XmlODataSchema>): ODataSchema {
   return {
     namespace: schema.$.Namespace,
     entityTypes: schema.EntityType ? schema.EntityType.map(getEntity) : [],
     complexTypes: schema.ComplexType ? schema.ComplexType.map(getEntity) : [],
     enumTypes: schema.EnumType ? schema.EnumType.map(getEnum) : [],
+    entityContainer: schema.EntityContainer
+      ? getEntityContainer(schema.EntityContainer[0])
+      : null,
   }
 }
 

@@ -3,7 +3,6 @@ import { join, resolve } from "path"
 import {
   Directory,
   EnumMemberStructure,
-  InterfaceDeclarationStructure,
   Project,
   PropertySignatureStructure,
   SourceFile,
@@ -34,24 +33,17 @@ function getProperty(property: ODataProperty): PropertySignatureStructure {
   }
 }
 
-function getPropertiesInterface(
-  entity: ODataEntity,
-): InterfaceDeclarationStructure {
-  return {
-    name: entity.name,
-    properties: entity.properties.map(getProperty),
-    isExported: true,
-  }
-}
-
 function addEntitiesToSchemaFile(
   schemaFile: SourceFile,
   entities: ODataEntity[],
 ): void {
   for (const entity of entities) {
-    const propertiesInterface = schemaFile.addInterface(
-      getPropertiesInterface(entity),
-    )
+    const propertiesInterface = schemaFile.addInterface({
+      name: entity.name,
+      properties: entity.properties.map(getProperty),
+      isExported: true,
+    })
+
     if (entity.navigationProperties.length) {
       const name = `${propertiesInterface.getName()}NavigationProperties`
       schemaFile.addInterface({
@@ -113,6 +105,19 @@ function createSchemaFile(
     directory,
   )
 
+  if (schema.entityContainer) {
+    schemaFile.addInterface({
+      name: schema.entityContainer.name,
+      properties: schema.entityContainer.entitySets.map<
+        PropertySignatureStructure
+      >(set => ({
+        name: set.name,
+        type: `${set.entityType}[]`,
+      })),
+      isExported: true,
+    })
+  }
+
   for (const enumType of schema.enumTypes) {
     schemaFile.addEnum({
       name: enumType.name,
@@ -125,8 +130,8 @@ function createSchemaFile(
   }
 
   addEntitiesToSchemaFile(schemaFile, [
-    ...schema.entityTypes,
     ...schema.complexTypes,
+    ...schema.entityTypes,
   ])
 
   return schemaFile
@@ -153,7 +158,8 @@ async function run(metadataFilePath: string): Promise<void> {
       schema =>
         schema.entityTypes.length ||
         schema.complexTypes.length ||
-        schema.enumTypes.length,
+        schema.enumTypes.length ||
+        schema.entityContainer,
     )
     .map(schema => {
       const schemaFile = createSchemaFile(schema, buildDirectory)
