@@ -2,16 +2,17 @@ import { removeSync } from "fs-extra"
 import { resolve } from "path"
 import {
   Directory,
-  EnumMemberStructure,
   IndentationText,
   Project,
   PropertySignatureStructure,
   SourceFile,
+  WriterFunction,
   WriterFunctions,
 } from "ts-morph"
 
 import {
   ODataEntity,
+  ODataEnumMember,
   ODataProperty,
   ODataSchema,
   parse,
@@ -21,9 +22,9 @@ const buildPath = resolve(__dirname, "../build")
 const basePath = resolve(__dirname, "base")
 const navigationPropertiesConstant = "Constant.navigationProperties"
 
-function getType(property: ODataProperty): string {
+function getType(property: ODataProperty): string | WriterFunction {
   const type = property.type.replace(/^Collection\((.*)\)$/, "$1[]")
-  return property.isNullable ? `${type} | null` : type
+  return property.isNullable ? WriterFunctions.unionType(type, "null") : type
 }
 
 function getProperty(property: ODataProperty): PropertySignatureStructure {
@@ -120,6 +121,28 @@ function getNamespacedSchemaFile(
   return getNamespacedSchemaFile(namespaceDirectory, remainingSegments)
 }
 
+function getEnumMembersType(
+  members: ODataEnumMember[],
+): string | WriterFunction {
+  const [
+    firstMemberNameType,
+    secondMemberNameType,
+    ...remainingMemberNameTypes
+  ] = members.map(member => `"${member.name}"`)
+
+  if (!firstMemberNameType) {
+    return "string"
+  }
+  if (!secondMemberNameType) {
+    return firstMemberNameType
+  }
+  return WriterFunctions.unionType(
+    firstMemberNameType,
+    secondMemberNameType,
+    ...remainingMemberNameTypes,
+  )
+}
+
 function createSchemaFile(
   schema: ODataSchema,
   directory: Directory,
@@ -143,12 +166,9 @@ function createSchemaFile(
   }
 
   for (const enumType of schema.enumTypes) {
-    schemaFile.addEnum({
+    schemaFile.addTypeAlias({
       name: enumType.name,
-      members: enumType.members.map<EnumMemberStructure>(member => ({
-        name: member.name,
-        value: member.value,
-      })),
+      type: getEnumMembersType(enumType.members),
       isExported: true,
     })
   }
