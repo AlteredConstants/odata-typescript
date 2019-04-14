@@ -7,11 +7,12 @@ import {
   PropertySignatureStructure,
   SourceFile,
 } from "ts-morph"
+
 import {
-  decode,
   ODataEntity,
   ODataProperty,
   ODataSchema,
+  decode,
   parse,
 } from "./parse-metadata"
 

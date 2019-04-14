@@ -1,8 +1,8 @@
 import fs from "fs"
 import * as t from "io-ts"
-import { PathReporter } from "io-ts/lib/PathReporter"
 import { BooleanFromString } from "io-ts-types"
 import { NonEmptyString } from "io-ts-types/lib/NonEmptyString"
+import { PathReporter } from "io-ts/lib/PathReporter"
 import { promisify } from "util"
 import { parseString as parseXmlString } from "xml2js"
 
