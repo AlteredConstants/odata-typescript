@@ -1,5 +1,5 @@
 import { removeSync } from "fs-extra"
-import { join, resolve } from "path"
+import { resolve } from "path"
 import {
   Directory,
   EnumMemberStructure,
@@ -19,9 +19,7 @@ import {
 
 const buildPath = resolve(__dirname, "../build")
 const basePath = resolve(__dirname, "base")
-const baseConstantPath = join(basePath, "constant.ts")
-const baseEdmPath = join(basePath, "edm.ts")
-const constantNamespace = "Constant"
+const navigationPropertiesConstant = "Constant.navigationProperties"
 
 function getType(property: ODataProperty): string {
   const type = property.type.replace(/^Collection\((.*)\)$/, "$1[]")
@@ -48,7 +46,7 @@ function addEntitiesToSchemaFile(
 
     if (entity.navigationProperties.length) {
       propertiesInterface.addProperty({
-        name: `[${constantNamespace}.navigationProperties]`,
+        name: `[${navigationPropertiesConstant}]`,
         type: WriterFunctions.objectType({
           properties: entity.navigationProperties.map(getProperty),
         }),
@@ -103,6 +101,7 @@ function getNamespacedSchemaFile(
   const indexFile = getIndexFile(directory)
   addNamespaceImport(indexFile, firstSegment)
   addNamespaceExport(indexFile, firstSegment)
+  indexFile.organizeImports()
 
   const namespaceDirectory =
     directory.getDirectory(firstSegment) ||
@@ -162,64 +161,40 @@ function createSchemaFile(
   return schemaFile
 }
 
+function getBuildDirectory(project: Project): Directory {
+  const baseDirectory = project.addExistingDirectory(basePath)
+  const indexFile = baseDirectory.addExistingSourceFile("index.ts")
+
+  const buildDirectory = baseDirectory.copy(buildPath)
+
+  indexFile.forget()
+  baseDirectory.forget()
+
+  return buildDirectory
+}
+
 async function run(metadataFilePath: string): Promise<void> {
   removeSync(buildPath)
 
   const project = new Project({
     manipulationSettings: { indentationText: IndentationText.TwoSpaces },
   })
-  const buildDirectory = project.createDirectory(buildPath)
-
-  const constantFile = project
-    .addExistingSourceFile(baseConstantPath)
-    .copyToDirectory(buildDirectory)
-  const edmFile = project
-    .addExistingSourceFile(baseEdmPath)
-    .copyToDirectory(buildDirectory)
-  const indexFile = buildDirectory.createSourceFile("index.ts")
+  const buildDirectory = getBuildDirectory(project)
 
   const metadata = await parse(metadataFilePath)
 
-  const schemaFiles = metadata.schemas
-    .filter(
-      schema =>
-        schema.entityTypes.length ||
-        schema.complexTypes.length ||
-        schema.enumTypes.length ||
-        schema.entityContainer,
-    )
-    .map(schema => {
-      const schemaFile = createSchemaFile(schema, buildDirectory)
+  const schemas = metadata.schemas.filter(
+    schema =>
+      schema.entityTypes.length ||
+      schema.complexTypes.length ||
+      schema.enumTypes.length ||
+      schema.entityContainer,
+  )
 
-      schemaFile.addImportDeclarations([
-        {
-          moduleSpecifier: schemaFile.getRelativePathAsModuleSpecifierTo(
-            constantFile,
-          ),
-          namespaceImport: constantNamespace,
-        },
-        {
-          moduleSpecifier: schemaFile.getRelativePathAsModuleSpecifierTo(
-            edmFile,
-          ),
-          namespaceImport: "Edm",
-        },
-      ])
-
-      return schemaFile
-    })
-
-  const exportNames = indexFile
-    .getExportDeclarations()
-    .map(declaration => declaration.getNamedExports())
-    .flat(1)
-    .map(specifier => specifier.getName())
-
-  for (const schemaFile of schemaFiles) {
-    schemaFile.addImportDeclaration({
-      moduleSpecifier: schemaFile.getRelativePathAsModuleSpecifierTo(indexFile),
-      namedImports: exportNames,
-    })
+  for (const schema of schemas) {
+    createSchemaFile(schema, buildDirectory)
+      .fixMissingImports()
+      .organizeImports()
   }
 
   await project.save()
