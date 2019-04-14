@@ -3,9 +3,11 @@ import { join, resolve } from "path"
 import {
   Directory,
   EnumMemberStructure,
+  IndentationText,
   Project,
   PropertySignatureStructure,
   SourceFile,
+  WriterFunctions,
 } from "ts-morph"
 
 import {
@@ -45,14 +47,11 @@ function addEntitiesToSchemaFile(
     })
 
     if (entity.navigationProperties.length) {
-      const name = `${propertiesInterface.getName()}NavigationProperties`
-      schemaFile.addInterface({
-        name,
-        properties: entity.navigationProperties.map(getProperty),
-      })
       propertiesInterface.addProperty({
         name: `[${constantNamespace}.navigationProperties]`,
-        type: name,
+        type: WriterFunctions.objectType({
+          properties: entity.navigationProperties.map(getProperty),
+        }),
       })
     }
   }
@@ -140,7 +139,9 @@ function createSchemaFile(
 async function run(metadataFilePath: string): Promise<void> {
   removeSync(buildPath)
 
-  const project = new Project()
+  const project = new Project({
+    manipulationSettings: { indentationText: IndentationText.TwoSpaces },
+  })
   const buildDirectory = project.createDirectory(buildPath)
 
   const constantFile = project
