@@ -2,6 +2,7 @@ import { removeSync } from "fs-extra"
 import { join, resolve } from "path"
 import {
   Directory,
+  EnumMemberStructure,
   InterfaceDeclarationStructure,
   Project,
   PropertySignatureStructure,
@@ -12,7 +13,6 @@ import {
   ODataEntity,
   ODataProperty,
   ODataSchema,
-  decode,
   parse,
 } from "./parse-metadata"
 
@@ -23,7 +23,7 @@ const baseEdmPath = join(basePath, "edm.ts")
 const constantNamespace = "Constant"
 
 function getType(property: ODataProperty): string {
-  const type = property.type.replace(/^Collection\((.*)\)$/, "Array<$1>")
+  const type = property.type.replace(/^Collection\((.*)\)$/, "$1[]")
   return property.isNullable ? `${type} | null` : type
 }
 
@@ -39,9 +39,7 @@ function getPropertiesInterface(
 ): InterfaceDeclarationStructure {
   return {
     name: entity.name,
-    properties: entity.properties
-      ? entity.properties.map(getProperty)
-      : undefined,
+    properties: entity.properties.map(getProperty),
     isExported: true,
   }
 }
@@ -54,7 +52,7 @@ function addEntitiesToSchemaFile(
     const propertiesInterface = schemaFile.addInterface(
       getPropertiesInterface(entity),
     )
-    if (entity.navigationProperties) {
+    if (entity.navigationProperties.length) {
       const name = `${propertiesInterface.getName()}NavigationProperties`
       schemaFile.addInterface({
         name,
@@ -115,9 +113,21 @@ function createSchemaFile(
     directory,
   )
 
-  if (schema.entities) {
-    addEntitiesToSchemaFile(schemaFile, schema.entities)
+  for (const enumType of schema.enumTypes) {
+    schemaFile.addEnum({
+      name: enumType.name,
+      members: enumType.members.map<EnumMemberStructure>(member => ({
+        name: member.name,
+        value: member.value,
+      })),
+      isExported: true,
+    })
   }
+
+  addEntitiesToSchemaFile(schemaFile, [
+    ...schema.entityTypes,
+    ...schema.complexTypes,
+  ])
 
   return schemaFile
 }
@@ -136,35 +146,41 @@ async function run(metadataFilePath: string): Promise<void> {
     .copyToDirectory(buildDirectory)
   const indexFile = buildDirectory.createSourceFile("index.ts")
 
-  const parsedValue = await parse(metadataFilePath)
+  const metadata = await parse(metadataFilePath)
 
-  const metadata = await decode(parsedValue)
-  const schemas = metadata.schemas.filter(s => s.entities)
+  const schemaFiles = metadata.schemas
+    .filter(
+      schema =>
+        schema.entityTypes.length ||
+        schema.complexTypes.length ||
+        schema.enumTypes.length,
+    )
+    .map(schema => {
+      const schemaFile = createSchemaFile(schema, buildDirectory)
 
-  const schemaFiles = schemas.map(schema => {
-    const schemaFile = createSchemaFile(schema, buildDirectory)
+      schemaFile.addImportDeclarations([
+        {
+          moduleSpecifier: schemaFile.getRelativePathAsModuleSpecifierTo(
+            constantFile,
+          ),
+          namespaceImport: constantNamespace,
+        },
+        {
+          moduleSpecifier: schemaFile.getRelativePathAsModuleSpecifierTo(
+            edmFile,
+          ),
+          namespaceImport: "Edm",
+        },
+      ])
 
-    schemaFile.addImportDeclarations([
-      {
-        moduleSpecifier: schemaFile.getRelativePathAsModuleSpecifierTo(
-          constantFile,
-        ),
-        namespaceImport: constantNamespace,
-      },
-      {
-        moduleSpecifier: schemaFile.getRelativePathAsModuleSpecifierTo(edmFile),
-        namespaceImport: "Edm",
-      },
-    ])
-
-    return schemaFile
-  })
+      return schemaFile
+    })
 
   const exportNames = indexFile
     .getExportDeclarations()
-    .map(d => d.getNamedExports())
+    .map(declaration => declaration.getNamedExports())
     .flat(1)
-    .map(e => e.getName())
+    .map(specifier => specifier.getName())
 
   for (const schemaFile of schemaFiles) {
     schemaFile.addImportDeclaration({

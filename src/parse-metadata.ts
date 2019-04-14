@@ -1,8 +1,9 @@
 import fs from "fs"
 import * as t from "io-ts"
-import { BooleanFromString } from "io-ts-types"
+import { BooleanFromString, IntegerFromString } from "io-ts-types"
 import { NonEmptyString } from "io-ts-types/lib/NonEmptyString"
 import { PathReporter } from "io-ts/lib/PathReporter"
+import { isNil } from "lodash"
 import { promisify } from "util"
 import { parseString as parseXmlString } from "xml2js"
 
@@ -16,13 +17,25 @@ export interface ODataProperty {
 
 export interface ODataEntity {
   name: string
-  properties: ODataProperty[] | null
-  navigationProperties: ODataProperty[] | null
+  properties: ODataProperty[]
+  navigationProperties: ODataProperty[]
+}
+
+export interface ODataEnumMember {
+  name: string
+  value: number
+}
+
+export interface ODataEnum {
+  name: string
+  members: ODataEnumMember[]
 }
 
 export interface ODataSchema {
   namespace: string
-  entities: ODataEntity[] | null
+  entityTypes: ODataEntity[]
+  complexTypes: ODataEntity[]
+  enumTypes: ODataEnum[]
 }
 
 export interface ODataMetadata {
@@ -53,7 +66,7 @@ const XmlODataNavigationProperty = t.type({
   ]),
 })
 
-const XmlODataEntity = t.intersection([
+const XmlODataEntityType = t.intersection([
   t.type({
     $: t.type({
       Name: NonEmptyString,
@@ -65,6 +78,40 @@ const XmlODataEntity = t.intersection([
   }),
 ])
 
+const XmlODataComplexType = t.intersection([
+  t.type({
+    $: t.type({
+      Name: NonEmptyString,
+    }),
+  }),
+  t.partial({
+    Property: t.array(XmlODataProperty),
+    NavigationProperty: t.array(XmlODataNavigationProperty),
+  }),
+])
+
+const XmlODataEnumMember = t.type({
+  $: t.intersection([
+    t.type({
+      Name: NonEmptyString,
+    }),
+    t.partial({
+      Value: IntegerFromString,
+    }),
+  ]),
+})
+
+const XmlODataEnumType = t.intersection([
+  t.type({
+    $: t.type({
+      Name: NonEmptyString,
+    }),
+  }),
+  t.partial({
+    Member: t.array(XmlODataEnumMember),
+  }),
+])
+
 const XmlODataSchema = t.intersection([
   t.type({
     $: t.type({
@@ -72,7 +119,9 @@ const XmlODataSchema = t.intersection([
     }),
   }),
   t.partial({
-    EntityType: t.array(XmlODataEntity),
+    EntityType: t.array(XmlODataEntityType),
+    ComplexType: t.array(XmlODataComplexType),
+    EnumType: t.array(XmlODataEnumType),
   }),
 ])
 
@@ -98,13 +147,43 @@ function getProperty(
   }
 }
 
-function getEntity(entity: t.TypeOf<typeof XmlODataEntity>): ODataEntity {
+function getEntity(
+  entity:
+    | t.TypeOf<typeof XmlODataEntityType>
+    | t.TypeOf<typeof XmlODataComplexType>,
+): ODataEntity {
   return {
     name: entity.$.Name,
-    properties: entity.Property ? entity.Property.map(getProperty) : null,
+    properties: entity.Property ? entity.Property.map(getProperty) : [],
     navigationProperties: entity.NavigationProperty
       ? entity.NavigationProperty.map(getProperty)
-      : null,
+      : [],
+  }
+}
+
+function getEnumMember(
+  member: t.TypeOf<typeof XmlODataEnumMember>,
+  index: number,
+): ODataEnumMember {
+  return {
+    name: member.$.Name,
+    value: isNil(member.$.Value) ? index : member.$.Value,
+  }
+}
+
+function getEnum(enumType: t.TypeOf<typeof XmlODataEnumType>): ODataEnum {
+  return {
+    name: enumType.$.Name,
+    members: enumType.Member ? enumType.Member.map(getEnumMember) : [],
+  }
+}
+
+function getSchema(schema: t.TypeOf<typeof XmlODataSchema>): ODataSchema {
+  return {
+    namespace: schema.$.Namespace,
+    entityTypes: schema.EntityType ? schema.EntityType.map(getEntity) : [],
+    complexTypes: schema.ComplexType ? schema.ComplexType.map(getEntity) : [],
+    enumTypes: schema.EnumType ? schema.EnumType.map(getEnum) : [],
   }
 }
 
@@ -113,15 +192,12 @@ function getMetadata(
 ): ODataMetadata {
   return {
     schemas: metadata["edmx:Edmx"]["edmx:DataServices"][0].Schema.map(
-      schema => ({
-        namespace: schema.$.Namespace,
-        entities: schema.EntityType ? schema.EntityType.map(getEntity) : null,
-      }),
+      getSchema,
     ),
   }
 }
 
-export async function parse(path: string): Promise<unknown> {
+async function parseXmlFile(path: string): Promise<unknown> {
   const xml = await readFile(path, { encoding: "utf8" })
 
   return new Promise<unknown>(async (resolve, reject) => {
@@ -131,7 +207,7 @@ export async function parse(path: string): Promise<unknown> {
   })
 }
 
-export async function decode(value: unknown): Promise<ODataMetadata> {
+async function decodeParsedXmlFile(value: unknown): Promise<ODataMetadata> {
   const metadata = XmlODataMetadata.decode(value).map(getMetadata)
 
   if (metadata.isLeft()) {
@@ -141,4 +217,10 @@ export async function decode(value: unknown): Promise<ODataMetadata> {
   }
 
   return metadata.value
+}
+
+export async function parse(path: string): Promise<ODataMetadata> {
+  const parsed = await parseXmlFile(path)
+  const decoded = await decodeParsedXmlFile(parsed)
+  return decoded
 }
