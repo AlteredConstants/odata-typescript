@@ -57,51 +57,77 @@ function addEntitiesToSchemaFile(
   }
 }
 
-function updateNamespaceIndex(
+function addNamespaceImport(
+  indexFile: SourceFile,
   namespaceSegment: string,
-  directory: Directory,
 ): void {
-  const indexFile =
-    directory.getSourceFile("index.ts") ||
-    directory.createSourceFile("index.ts")
-
-  indexFile.addImportDeclaration({
-    moduleSpecifier: `./${namespaceSegment}`,
-    namespaceImport: namespaceSegment,
-  })
-
-  const exportDeclaration =
-    indexFile.getExportDeclaration(d => !d.hasModuleSpecifier()) ||
-    indexFile.addExportDeclaration({})
-  exportDeclaration.addNamedExport({ name: namespaceSegment })
+  const moduleSpecifier = `./${namespaceSegment}`
+  if (!indexFile.getImportDeclaration(moduleSpecifier)) {
+    indexFile.addImportDeclaration({
+      moduleSpecifier,
+      namespaceImport: namespaceSegment,
+    })
+  }
 }
 
-function updateNamespaceDirectories(
-  namespace: string[],
+function addNamespaceExport(
+  indexFile: SourceFile,
+  namespaceSegment: string,
+): void {
+  let exportDeclaration =
+    indexFile.getExportDeclaration(d => !d.hasModuleSpecifier()) ||
+    indexFile.addExportDeclaration({})
+
+  const namedExportExists = exportDeclaration
+    .getNamedExports()
+    .some(specifier => specifier.getName() === namespaceSegment)
+
+  if (!namedExportExists) {
+    exportDeclaration.addNamedExport({ name: namespaceSegment })
+  }
+}
+
+function getIndexFile(directory: Directory): SourceFile {
+  return (
+    directory.getSourceFile("index.ts") ||
+    directory.createSourceFile("index.ts")
+  )
+}
+
+function getNamespacedSchemaFile(
   directory: Directory,
+  namespace: string[],
 ): SourceFile {
-  const [firstSegment, ...restSegments] = namespace
+  const [firstSegment, ...remainingSegments] = namespace
 
-  updateNamespaceIndex(firstSegment, directory)
+  const indexFile = getIndexFile(directory)
+  addNamespaceImport(indexFile, firstSegment)
+  addNamespaceExport(indexFile, firstSegment)
 
-  if (restSegments.length) {
-    const subDirectory =
-      directory.getDirectory(firstSegment) ||
-      directory.createDirectory(firstSegment)
+  const namespaceDirectory =
+    directory.getDirectory(firstSegment) ||
+    directory.createDirectory(firstSegment)
 
-    return updateNamespaceDirectories(restSegments, subDirectory)
+  if (!remainingSegments.length) {
+    const schemaFileName = `${firstSegment}-schema`
+
+    getIndexFile(namespaceDirectory).addExportDeclaration({
+      moduleSpecifier: `./${schemaFileName}`,
+    })
+
+    return namespaceDirectory.createSourceFile(`${schemaFileName}.ts`)
   }
 
-  return directory.createSourceFile(`${firstSegment}.ts`)
+  return getNamespacedSchemaFile(namespaceDirectory, remainingSegments)
 }
 
 function createSchemaFile(
   schema: ODataSchema,
   directory: Directory,
 ): SourceFile {
-  const schemaFile = updateNamespaceDirectories(
-    schema.namespace.split("."),
+  const schemaFile = getNamespacedSchemaFile(
     directory,
+    schema.namespace.split("."),
   )
 
   if (schema.entityContainer) {
