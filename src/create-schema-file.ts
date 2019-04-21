@@ -16,7 +16,7 @@ import {
 const navigationPropertiesConstant = "Constant.navigationProperties"
 
 function getType(property: ODataProperty): string | WriterFunction {
-  const type = property.type.replace(/^Collection\((.*)\)$/, "$1[]")
+  const type = property.isCollection ? `${property.type}[]` : property.type
   return property.isNullable ? WriterFunctions.unionType(type, "null") : type
 }
 
@@ -150,9 +150,9 @@ export function createSchemaFile(
       name: schema.entityContainer.name,
       properties: schema.entityContainer.entitySets.map<
         PropertySignatureStructure
-      >(set => ({
-        name: set.name,
-        type: `${set.entityType}[]`,
+      >(entitySet => ({
+        name: entitySet.name,
+        type: `${entitySet.type}[]`,
       })),
       isExported: true,
     })

@@ -22,6 +22,7 @@ const QualifiedName = t.brand(
   "QualifiedName",
 )
 
+export const collectionTypeQualifiedNameRegExp = /^Collection\((.+)\)$/
 interface SingleOrCollectionTypeQualifiedNameBrand {
   readonly SingleOrCollectionTypeQualifiedName: unique symbol
 }
@@ -30,7 +31,7 @@ const SingleOrCollectionTypeQualifiedName = t.brand(
   (
     value,
   ): value is t.Branded<string, SingleOrCollectionTypeQualifiedNameBrand> =>
-    QualifiedName.is(value.replace(/^Collection\((.+)\)$/, "$1")),
+    QualifiedName.is(value.replace(collectionTypeQualifiedNameRegExp, "$1")),
   "SingleOrCollectionTypeQualifiedName",
 )
 

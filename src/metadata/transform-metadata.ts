@@ -19,14 +19,18 @@ import {
   XmlODataNavigationProperty,
   XmlODataProperty,
   XmlODataSchema,
+  collectionTypeQualifiedNameRegExp,
 } from "./xml-types"
 
 function getProperty(
   property: XmlODataProperty | XmlODataNavigationProperty,
 ): ODataProperty {
+  const type = property.$.Type
+  const typeMatch = collectionTypeQualifiedNameRegExp.exec(type)
   return {
     name: property.$.Name,
-    type: property.$.Type,
+    type: typeMatch ? typeMatch[1] : type,
+    isCollection: !!typeMatch,
     isNullable: property.$.Nullable === undefined ? true : property.$.Nullable,
   }
 }
@@ -63,7 +67,7 @@ function getEnum(enumType: XmlODataEnumType): ODataEnum {
 function getEntitySet(set: XmlODataEntitySet): ODataEntitySet {
   return {
     name: set.$.Name,
-    entityType: set.$.EntityType,
+    type: set.$.EntityType,
   }
 }
 

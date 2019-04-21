@@ -1,6 +1,7 @@
 export interface ODataProperty {
   name: string
   type: string
+  isCollection: boolean
   isNullable: boolean
 }
 
@@ -22,7 +23,7 @@ export interface ODataEnum {
 
 export interface ODataEntitySet {
   name: string
-  entityType: string
+  type: string
 }
 
 export interface ODataEntityContainer {
