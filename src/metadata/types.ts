@@ -21,6 +21,35 @@ export interface ODataEnum {
   members: ODataEnumMember[]
 }
 
+export interface ODataReturnType {
+  type: string
+  isCollection: boolean
+  isNullable: boolean
+}
+
+export interface ODataParameter {
+  name: string
+  type: string
+  isCollection: boolean
+  isNullable: boolean
+}
+
+export interface ODataUnboundFunction {
+  name: string
+  parameters: ODataParameter[]
+  returnType: ODataReturnType
+}
+
+export interface ODataBoundFunction extends ODataUnboundFunction {
+  boundType: {
+    type: string
+    isCollection: boolean
+    isNullable: boolean
+  }
+}
+
+export type ODataFunction = ODataUnboundFunction | ODataBoundFunction
+
 export interface ODataEntitySet {
   name: string
   type: string
@@ -36,6 +65,7 @@ export interface ODataSchema {
   entityTypes: ODataEntity[]
   complexTypes: ODataEntity[]
   enumTypes: ODataEnum[]
+  functions: ODataFunction[]
   entityContainer: ODataEntityContainer | null
 }
 

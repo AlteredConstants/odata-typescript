@@ -1,3 +1,5 @@
+import { chain, map } from "fp-ts/lib/Either"
+import { pipe } from "fp-ts/lib/pipeable"
 import * as t from "io-ts"
 import { extendType } from "io-ts-promise"
 
@@ -21,6 +23,22 @@ const BooleanFromString = extendType(
   "BooleanFromString",
 )
 
+const True = new t.Type<true, boolean, boolean>(
+  "True",
+  (value): value is true => value === true,
+  (value, context) => (value ? t.success(value) : t.failure(value, context)),
+  t.identity,
+)
+const TrueFromString = BooleanFromString.pipe(True, "TrueFromString")
+
+const False = new t.Type<false, boolean, boolean>(
+  "False",
+  (value): value is false => value === false,
+  (value, context) => (!value ? t.success(value) : t.failure(value, context)),
+  t.identity,
+)
+const FalseFromString = BooleanFromString.pipe(False, "FalseFromString")
+
 const simpleIdentifierRegExp = /^[_\p{L}\p{Nl}](?:[_\p{L}\p{Nl}\p{Nd}\p{Mn}\p{Mc}\p{Pc}\p{Cf}])*$/u
 interface SimpleIdentifierBrand {
   readonly SimpleIdentifier: unique symbol
@@ -42,17 +60,28 @@ const QualifiedName = t.brand(
   "QualifiedName",
 )
 
-export const collectionTypeQualifiedNameRegExp = /^Collection\((.+)\)$/
-interface SingleOrCollectionTypeQualifiedNameBrand {
-  readonly SingleOrCollectionTypeQualifiedName: unique symbol
-}
-const SingleOrCollectionTypeQualifiedName = t.brand(
-  t.string,
-  (
-    value,
-  ): value is t.Branded<string, SingleOrCollectionTypeQualifiedNameBrand> =>
-    QualifiedName.is(value.replace(collectionTypeQualifiedNameRegExp, "$1")),
+const TypeInfo = t.type({ name: t.string, isCollection: t.boolean })
+const SingleOrCollectionTypeQualifiedName = new t.Type<
+  t.TypeOf<typeof TypeInfo>,
+  unknown,
+  unknown
+>(
   "SingleOrCollectionTypeQualifiedName",
+  TypeInfo.is,
+  (value, context) => {
+    return pipe(
+      t.string.validate(value, context),
+      chain(stringValue => {
+        const matches = /^Collection\((.+)\)$/.exec(stringValue)
+        const baseType = matches ? matches[1] : stringValue
+        return pipe(
+          QualifiedName.validate(baseType, context),
+          map(name => ({ name, isCollection: !!matches })),
+        )
+      }),
+    )
+  },
+  value => (value.isCollection ? `Collection(${value.name})` : value.name),
 )
 
 const XmlODataPropertyCodec = t.type(
@@ -151,6 +180,75 @@ const XmlODataEnumTypeCodec = t.intersection(
 )
 export type XmlODataEnumType = t.TypeOf<typeof XmlODataEnumTypeCodec>
 
+const XmlODataParameterCodec = t.type(
+  {
+    $: t.intersection([
+      t.type({
+        Name: SimpleIdentifier,
+        Type: SingleOrCollectionTypeQualifiedName,
+      }),
+      t.partial({
+        Nullable: BooleanFromString,
+      }),
+    ]),
+  },
+  "ODataParameter",
+)
+export type XmlODataParameter = t.TypeOf<typeof XmlODataParameterCodec>
+
+const XmlODataReturnTypeCodec = t.type(
+  {
+    $: t.intersection([
+      t.type({
+        Type: SingleOrCollectionTypeQualifiedName,
+      }),
+      t.partial({
+        Nullable: BooleanFromString,
+      }),
+    ]),
+  },
+  "ODataReturnType",
+)
+export type XmlODataReturnType = t.TypeOf<typeof XmlODataReturnTypeCodec>
+
+const XmlODataBoundFunctionCodec = t.type(
+  {
+    $: t.type({
+      Name: SimpleIdentifier,
+      IsBound: TrueFromString,
+    }),
+    Parameter: t.array(XmlODataParameterCodec),
+    ReturnType: t.tuple([XmlODataReturnTypeCodec]),
+  },
+  "ODataBoundFunction",
+)
+
+const XmlODataUnboundFunctionCodec = t.intersection(
+  [
+    t.type({
+      $: t.intersection([
+        t.type({
+          Name: SimpleIdentifier,
+        }),
+        t.partial({
+          IsBound: FalseFromString,
+        }),
+      ]),
+      ReturnType: t.tuple([XmlODataReturnTypeCodec]),
+    }),
+    t.partial({
+      Parameter: t.array(XmlODataParameterCodec),
+    }),
+  ],
+  "ODataUnboundFunction",
+)
+
+const XmlODataFunctionCodec = t.union([
+  XmlODataBoundFunctionCodec,
+  XmlODataUnboundFunctionCodec,
+])
+export type XmlODataFunction = t.TypeOf<typeof XmlODataFunctionCodec>
+
 const XmlODataEntitySetCodec = t.type(
   {
     $: t.type({
@@ -191,6 +289,7 @@ const XmlODataSchemaCodec = t.intersection(
       EntityContainer: t.tuple([XmlODataEntityContainerCodec]),
       EntityType: t.array(XmlODataEntityTypeCodec),
       EnumType: t.array(XmlODataEnumTypeCodec),
+      Function: t.array(XmlODataFunctionCodec),
     }),
   ],
   "ODataSchema",

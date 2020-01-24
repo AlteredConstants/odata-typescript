@@ -1,37 +1,57 @@
 import {
+  ODataBoundFunction,
   ODataEntity,
   ODataEntityContainer,
   ODataEntitySet,
   ODataEnum,
   ODataEnumMember,
+  ODataFunction,
   ODataMetadata,
+  ODataParameter,
   ODataProperty,
   ODataSchema,
+  ODataUnboundFunction,
 } from "./types"
 import {
-  collectionTypeQualifiedNameRegExp,
   XmlODataComplexType,
   XmlODataEntityContainer,
   XmlODataEntitySet,
   XmlODataEntityType,
   XmlODataEnumMember,
   XmlODataEnumType,
+  XmlODataFunction,
   XmlODataMetadata,
   XmlODataNavigationProperty,
+  XmlODataParameter,
   XmlODataProperty,
+  XmlODataReturnType,
   XmlODataSchema,
 } from "./xml-types"
+
+function getBaseAttributes(
+  value:
+    | XmlODataProperty
+    | XmlODataNavigationProperty
+    | XmlODataParameter
+    | XmlODataReturnType,
+): {
+  type: string
+  isCollection: boolean
+  isNullable: boolean
+} {
+  return {
+    type: value.$.Type.name,
+    isCollection: value.$.Type.isCollection,
+    isNullable: value.$.Nullable ?? true,
+  }
+}
 
 function getProperty(
   property: XmlODataProperty | XmlODataNavigationProperty,
 ): ODataProperty {
-  const type = property.$.Type
-  const typeMatch = collectionTypeQualifiedNameRegExp.exec(type)
   return {
+    ...getBaseAttributes(property),
     name: property.$.Name,
-    type: typeMatch ? typeMatch[1] : type,
-    isCollection: !!typeMatch,
-    isNullable: property.$.Nullable ?? true,
   }
 }
 
@@ -62,6 +82,39 @@ function getEnum(enumType: XmlODataEnumType): ODataEnum {
   }
 }
 
+function getParameter(parameter: XmlODataParameter): ODataParameter {
+  return {
+    ...getBaseAttributes(parameter),
+    name: parameter.$.Name,
+  }
+}
+
+function getFunction(functionType: XmlODataFunction): ODataFunction {
+  const returnType = functionType.ReturnType[0]
+  const base = {
+    name: functionType.$.Name,
+    parameters: functionType.Parameter?.map(getParameter) ?? [],
+    returnType: getBaseAttributes(returnType),
+  }
+
+  if (functionType.$.IsBound) {
+    if (!functionType.Parameter) {
+      // This should never happen since the codec checks for this.
+      // Unfortunately, discriminated unions don't work from in nested objects.
+      throw new Error("Bound function missing binding parameter.")
+    }
+
+    const bound: ODataBoundFunction = {
+      ...base,
+      boundType: getBaseAttributes(functionType.Parameter[0]),
+    }
+    return bound
+  } else {
+    const unbound: ODataUnboundFunction = base
+    return unbound
+  }
+}
+
 function getEntitySet(set: XmlODataEntitySet): ODataEntitySet {
   return {
     name: set.$.Name,
@@ -84,6 +137,7 @@ function getSchema(schema: XmlODataSchema): ODataSchema {
     entityTypes: schema.EntityType?.map(getEntity) ?? [],
     complexTypes: schema.ComplexType?.map(getEntity) ?? [],
     enumTypes: schema.EnumType?.map(getEnum) ?? [],
+    functions: schema.Function?.map(getFunction) ?? [],
     entityContainer: schema.EntityContainer
       ? getEntityContainer(schema.EntityContainer[0])
       : null,
