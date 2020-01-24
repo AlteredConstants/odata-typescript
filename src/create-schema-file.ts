@@ -16,6 +16,7 @@ import {
   ODataEnum,
   ODataEnumMember,
   ODataFunction,
+  ODataFunctionImport,
   ODataParameter,
   ODataProperty,
   ODataReturnType,
@@ -172,6 +173,15 @@ function getEnumInterface(
   }
 }
 
+function getFunctionImportProperty(
+  functionImport: ODataFunctionImport,
+): OptionalKind<PropertySignatureStructure> {
+  return {
+    name: functionImport.name,
+    type: functionImport.functionName,
+  }
+}
+
 function getFunctionParameter(
   parameter: ODataParameter,
 ): OptionalKind<ParameterDeclarationStructure> {
@@ -192,7 +202,7 @@ function getFunctionInterface(
         returnType: getType(func.returnType),
       },
     ],
-    isExported: false,
+    isExported: true,
   }
 }
 
@@ -237,7 +247,17 @@ export function createSchemaFile(
   if (schema.entityContainer) {
     schemaFile.addInterface({
       name: schema.entityContainer.name,
-      properties: schema.entityContainer.entitySets.map(getEntitySetProperty),
+      properties: [
+        ...schema.entityContainer.entitySets.map(getEntitySetProperty),
+        {
+          name: functionsConstant,
+          type: Writers.objectType({
+            properties: schema.entityContainer.functionImports.map(
+              getFunctionImportProperty,
+            ),
+          }),
+        },
+      ],
       isExported: true,
     })
   }

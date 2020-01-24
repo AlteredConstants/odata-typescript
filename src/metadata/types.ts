@@ -55,9 +55,15 @@ export interface ODataEntitySet {
   type: string
 }
 
+export interface ODataFunctionImport {
+  name: string
+  functionName: string
+}
+
 export interface ODataEntityContainer {
   name: string
   entitySets: ODataEntitySet[]
+  functionImports: ODataFunctionImport[]
 }
 
 export interface ODataSchema {

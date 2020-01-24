@@ -260,6 +260,19 @@ const XmlODataEntitySetCodec = t.type(
 )
 export type XmlODataEntitySet = t.TypeOf<typeof XmlODataEntitySetCodec>
 
+const XmlODataFunctionImportCodec = t.type(
+  {
+    $: t.type({
+      Name: SimpleIdentifier,
+      Function: QualifiedName,
+    }),
+  },
+  "ODataFunctionImport",
+)
+export type XmlODataFunctionImport = t.TypeOf<
+  typeof XmlODataFunctionImportCodec
+>
+
 const XmlODataEntityContainerCodec = t.intersection(
   [
     t.type({
@@ -269,6 +282,7 @@ const XmlODataEntityContainerCodec = t.intersection(
     }),
     t.partial({
       EntitySet: t.array(XmlODataEntitySetCodec),
+      FunctionImport: t.array(XmlODataFunctionImportCodec),
     }),
   ],
   "ODataEntityContainer",

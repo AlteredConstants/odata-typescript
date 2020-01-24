@@ -6,6 +6,7 @@ import {
   ODataEnum,
   ODataEnumMember,
   ODataFunction,
+  ODataFunctionImport,
   ODataMetadata,
   ODataParameter,
   ODataProperty,
@@ -20,6 +21,7 @@ import {
   XmlODataEnumMember,
   XmlODataEnumType,
   XmlODataFunction,
+  XmlODataFunctionImport,
   XmlODataMetadata,
   XmlODataNavigationProperty,
   XmlODataParameter,
@@ -122,12 +124,20 @@ function getEntitySet(set: XmlODataEntitySet): ODataEntitySet {
   }
 }
 
+function getFunctionImport(value: XmlODataFunctionImport): ODataFunctionImport {
+  return {
+    name: value.$.Name,
+    functionName: value.$.Function,
+  }
+}
+
 function getEntityContainer(
   container: XmlODataEntityContainer,
 ): ODataEntityContainer {
   return {
     name: container.$.Name,
     entitySets: container.EntitySet?.map(getEntitySet) ?? [],
+    functionImports: container.FunctionImport?.map(getFunctionImport) ?? [],
   }
 }
 
