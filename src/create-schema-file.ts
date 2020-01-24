@@ -1,53 +1,71 @@
 import {
   Directory,
+  InterfaceDeclarationStructure,
+  OptionalKind,
   PropertySignatureStructure,
   SourceFile,
-  StructureKind,
+  TypeAliasDeclarationStructure,
   WriterFunction,
   Writers,
 } from "ts-morph"
 
 import {
   ODataEntity,
+  ODataEntitySet,
+  ODataEnum,
   ODataEnumMember,
+  ODataParameter,
   ODataProperty,
   ODataSchema,
 } from "./metadata/types"
 
-const navigationPropertiesConstant = "Constant.navigationProperties"
+const navigationPropertiesConstant = "[Constant.navigationProperties]"
 
 function getType(property: ODataProperty): string | WriterFunction {
   const type = property.isCollection ? `${property.type}[]` : property.type
   return property.isNullable ? Writers.unionType(type, "null") : type
 }
 
-function getProperty(property: ODataProperty): PropertySignatureStructure {
+function getProperty(
+  property: ODataProperty | ODataParameter,
+): OptionalKind<PropertySignatureStructure> {
   return {
-    kind: StructureKind.PropertySignature,
     name: property.name,
     type: getType(property),
   }
 }
 
-function addEntitiesToSchemaFile(
-  schemaFile: SourceFile,
-  entities: ODataEntity[],
-): void {
-  for (const entity of entities) {
-    const propertiesInterface = schemaFile.addInterface({
-      name: entity.name,
-      properties: entity.properties.map(getProperty),
-      isExported: true,
+function getEntityProperties(
+  entity: ODataEntity,
+): OptionalKind<PropertySignatureStructure>[] {
+  const properties = entity.properties.map(getProperty)
+  if (entity.navigationProperties.length) {
+    properties.push({
+      name: navigationPropertiesConstant,
+      type: Writers.objectType({
+        properties: entity.navigationProperties.map(getProperty),
+      }),
     })
+  }
+  return properties
+}
 
-    if (entity.navigationProperties.length) {
-      propertiesInterface.addProperty({
-        name: `[${navigationPropertiesConstant}]`,
-        type: Writers.objectType({
-          properties: entity.navigationProperties.map(getProperty),
-        }),
-      })
-    }
+function getEntityInterface(
+  entity: ODataEntity,
+): OptionalKind<InterfaceDeclarationStructure> {
+  return {
+    name: entity.name,
+    properties: getEntityProperties(entity),
+    isExported: true,
+  }
+}
+
+function getEntitySetProperty(
+  entitySet: ODataEntitySet,
+): OptionalKind<PropertySignatureStructure> {
+  return {
+    name: entitySet.name,
+    type: `${entitySet.type}[]`,
   }
 }
 
@@ -138,6 +156,16 @@ function getEnumMembersType(
   )
 }
 
+function getEnumInterface(
+  enumType: ODataEnum,
+): OptionalKind<TypeAliasDeclarationStructure> {
+  return {
+    name: enumType.name,
+    type: getEnumMembersType(enumType.members),
+    isExported: true,
+  }
+}
+
 export function createSchemaFile(
   schema: ODataSchema,
   directory: Directory,
@@ -150,28 +178,16 @@ export function createSchemaFile(
   if (schema.entityContainer) {
     schemaFile.addInterface({
       name: schema.entityContainer.name,
-      properties: schema.entityContainer.entitySets.map<
-        PropertySignatureStructure
-      >(entitySet => ({
-        kind: StructureKind.PropertySignature,
-        name: entitySet.name,
-        type: `${entitySet.type}[]`,
-      })),
+      properties: schema.entityContainer.entitySets.map(getEntitySetProperty),
       isExported: true,
     })
   }
 
-  for (const enumType of schema.enumTypes) {
-    schemaFile.addTypeAlias({
-      name: enumType.name,
-      type: getEnumMembersType(enumType.members),
-      isExported: true,
-    })
-  }
+  schemaFile.addTypeAliases(schema.enumTypes.map(getEnumInterface))
 
-  addEntitiesToSchemaFile(schemaFile, [
-    ...schema.complexTypes,
-    ...schema.entityTypes,
+  schemaFile.addInterfaces([
+    ...schema.complexTypes.map(getEntityInterface),
+    ...schema.entityTypes.map(getEntityInterface),
   ])
 
   return schemaFile.fixMissingImports().organizeImports()
