@@ -1,5 +1,25 @@
 import * as t from "io-ts"
-import { BooleanFromString, IntegerFromString } from "io-ts-types"
+import { extendType } from "io-ts-promise"
+
+const NumberFromXmlSchemaIntegerString = extendType(
+  t.string,
+  value => {
+    if (/^[+-]?\d+$/.test(value)) {
+      return Number(value)
+    } else {
+      throw new Error(`Value "${value}" is not a valid XML Schema integer.`)
+    }
+  },
+  value => value.toString(),
+  "SimpleIntegerFromString",
+)
+
+const BooleanFromString = extendType(
+  t.keyof({ true: null, false: null }),
+  value => value === "true",
+  value => (value ? "true" : "false"),
+  "BooleanFromString",
+)
 
 const simpleIdentifierRegExp = /^[_\p{L}\p{Nl}](?:[_\p{L}\p{Nl}\p{Nd}\p{Mn}\p{Mc}\p{Pc}\p{Cf}])*$/u
 interface SimpleIdentifierBrand {
@@ -95,7 +115,7 @@ const XmlODataEnumMemberCodec = t.type({
       Name: SimpleIdentifier,
     }),
     t.partial({
-      Value: IntegerFromString,
+      Value: NumberFromXmlSchemaIntegerString,
     }),
   ]),
 })

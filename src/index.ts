@@ -9,8 +9,8 @@ const buildPath = resolve(__dirname, "../build")
 const basePath = resolve(__dirname, "base")
 
 function getBuildDirectory(project: Project): Directory {
-  const baseDirectory = project.addExistingDirectory(basePath)
-  const indexFile = baseDirectory.addExistingSourceFile("index.ts")
+  const baseDirectory = project.addDirectoryAtPath(basePath)
+  const indexFile = baseDirectory.addSourceFileAtPath("index.ts")
 
   const buildDirectory = baseDirectory.copy(buildPath)
 

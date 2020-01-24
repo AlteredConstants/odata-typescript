@@ -9,6 +9,7 @@ import {
   ODataSchema,
 } from "./types"
 import {
+  collectionTypeQualifiedNameRegExp,
   XmlODataComplexType,
   XmlODataEntityContainer,
   XmlODataEntitySet,
@@ -19,7 +20,6 @@ import {
   XmlODataNavigationProperty,
   XmlODataProperty,
   XmlODataSchema,
-  collectionTypeQualifiedNameRegExp,
 } from "./xml-types"
 
 function getProperty(

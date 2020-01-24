@@ -2,8 +2,9 @@ import {
   Directory,
   PropertySignatureStructure,
   SourceFile,
+  StructureKind,
   WriterFunction,
-  WriterFunctions,
+  Writers,
 } from "ts-morph"
 
 import {
@@ -17,11 +18,12 @@ const navigationPropertiesConstant = "Constant.navigationProperties"
 
 function getType(property: ODataProperty): string | WriterFunction {
   const type = property.isCollection ? `${property.type}[]` : property.type
-  return property.isNullable ? WriterFunctions.unionType(type, "null") : type
+  return property.isNullable ? Writers.unionType(type, "null") : type
 }
 
 function getProperty(property: ODataProperty): PropertySignatureStructure {
   return {
+    kind: StructureKind.PropertySignature,
     name: property.name,
     type: getType(property),
   }
@@ -41,7 +43,7 @@ function addEntitiesToSchemaFile(
     if (entity.navigationProperties.length) {
       propertiesInterface.addProperty({
         name: `[${navigationPropertiesConstant}]`,
-        type: WriterFunctions.objectType({
+        type: Writers.objectType({
           properties: entity.navigationProperties.map(getProperty),
         }),
       })
@@ -66,7 +68,7 @@ function addNamespaceExport(
   indexFile: SourceFile,
   namespaceSegment: string,
 ): void {
-  let exportDeclaration =
+  const exportDeclaration =
     indexFile.getExportDeclaration(d => !d.hasModuleSpecifier()) ||
     indexFile.addExportDeclaration({})
 
@@ -129,7 +131,7 @@ function getEnumMembersType(
   if (!secondMemberNameType) {
     return firstMemberNameType
   }
-  return WriterFunctions.unionType(
+  return Writers.unionType(
     firstMemberNameType,
     secondMemberNameType,
     ...remainingMemberNameTypes,
@@ -151,6 +153,7 @@ export function createSchemaFile(
       properties: schema.entityContainer.entitySets.map<
         PropertySignatureStructure
       >(entitySet => ({
+        kind: StructureKind.PropertySignature,
         name: entitySet.name,
         type: `${entitySet.type}[]`,
       })),
