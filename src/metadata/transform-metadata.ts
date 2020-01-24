@@ -31,7 +31,7 @@ function getProperty(
     name: property.$.Name,
     type: typeMatch ? typeMatch[1] : type,
     isCollection: !!typeMatch,
-    isNullable: property.$.Nullable === undefined ? true : property.$.Nullable,
+    isNullable: property.$.Nullable ?? true,
   }
 }
 
@@ -40,10 +40,8 @@ function getEntity(
 ): ODataEntity {
   return {
     name: entity.$.Name,
-    properties: entity.Property ? entity.Property.map(getProperty) : [],
-    navigationProperties: entity.NavigationProperty
-      ? entity.NavigationProperty.map(getProperty)
-      : [],
+    properties: entity.Property?.map(getProperty) ?? [],
+    navigationProperties: entity.NavigationProperty?.map(getProperty) ?? [],
   }
 }
 
@@ -53,14 +51,14 @@ function getEnumMember(
 ): ODataEnumMember {
   return {
     name: member.$.Name,
-    value: member.$.Value === undefined ? index : member.$.Value,
+    value: member.$.Value ?? index,
   }
 }
 
 function getEnum(enumType: XmlODataEnumType): ODataEnum {
   return {
     name: enumType.$.Name,
-    members: enumType.Member ? enumType.Member.map(getEnumMember) : [],
+    members: enumType.Member?.map(getEnumMember) ?? [],
   }
 }
 
@@ -76,18 +74,16 @@ function getEntityContainer(
 ): ODataEntityContainer {
   return {
     name: container.$.Name,
-    entitySets: container.EntitySet
-      ? container.EntitySet.map(getEntitySet)
-      : [],
+    entitySets: container.EntitySet?.map(getEntitySet) ?? [],
   }
 }
 
 function getSchema(schema: XmlODataSchema): ODataSchema {
   return {
     namespace: schema.$.Namespace,
-    entityTypes: schema.EntityType ? schema.EntityType.map(getEntity) : [],
-    complexTypes: schema.ComplexType ? schema.ComplexType.map(getEntity) : [],
-    enumTypes: schema.EnumType ? schema.EnumType.map(getEnum) : [],
+    entityTypes: schema.EntityType?.map(getEntity) ?? [],
+    complexTypes: schema.ComplexType?.map(getEntity) ?? [],
+    enumTypes: schema.EnumType?.map(getEnum) ?? [],
     entityContainer: schema.EntityContainer
       ? getEntityContainer(schema.EntityContainer[0])
       : null,

@@ -69,7 +69,7 @@ function addNamespaceExport(
   namespaceSegment: string,
 ): void {
   const exportDeclaration =
-    indexFile.getExportDeclaration(d => !d.hasModuleSpecifier()) ||
+    indexFile.getExportDeclaration(d => !d.hasModuleSpecifier()) ??
     indexFile.addExportDeclaration({})
 
   const namedExportExists = exportDeclaration
@@ -83,7 +83,7 @@ function addNamespaceExport(
 
 function getIndexFile(directory: Directory): SourceFile {
   return (
-    directory.getSourceFile("index.ts") ||
+    directory.getSourceFile("index.ts") ??
     directory.createSourceFile("index.ts")
   )
 }
@@ -100,7 +100,7 @@ function getNamespacedSchemaFile(
   indexFile.organizeImports()
 
   const namespaceDirectory =
-    directory.getDirectory(firstSegment) ||
+    directory.getDirectory(firstSegment) ??
     directory.createDirectory(firstSegment)
 
   if (!remainingSegments.length) {
