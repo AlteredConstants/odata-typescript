@@ -12,6 +12,7 @@ import {
 
 import {
   ODataEntity,
+  ODataEntityContainer,
   ODataEntitySet,
   ODataEnum,
   ODataEnumMember,
@@ -235,6 +236,23 @@ function bindFunctions(
   }
 }
 
+function getContainerProperties(
+  entityContainer: ODataEntityContainer,
+): OptionalKind<PropertySignatureStructure>[] {
+  const properties = entityContainer.entitySets.map(getEntitySetProperty)
+  if (entityContainer.functionImports.length) {
+    properties.push({
+      name: functionsConstant,
+      type: Writers.objectType({
+        properties: entityContainer.functionImports.map(
+          getFunctionImportProperty,
+        ),
+      }),
+    })
+  }
+  return properties
+}
+
 export function createSchemaFile(
   schema: ODataSchema,
   directory: Directory,
@@ -247,17 +265,7 @@ export function createSchemaFile(
   if (schema.entityContainer) {
     schemaFile.addInterface({
       name: schema.entityContainer.name,
-      properties: [
-        ...schema.entityContainer.entitySets.map(getEntitySetProperty),
-        {
-          name: functionsConstant,
-          type: Writers.objectType({
-            properties: schema.entityContainer.functionImports.map(
-              getFunctionImportProperty,
-            ),
-          }),
-        },
-      ],
+      properties: getContainerProperties(schema.entityContainer),
       isExported: true,
     })
   }
