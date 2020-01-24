@@ -2,6 +2,7 @@ import {
   Directory,
   InterfaceDeclarationStructure,
   OptionalKind,
+  ParameterDeclarationStructure,
   PropertySignatureStructure,
   SourceFile,
   TypeAliasDeclarationStructure,
@@ -14,14 +15,19 @@ import {
   ODataEntitySet,
   ODataEnum,
   ODataEnumMember,
+  ODataFunction,
   ODataParameter,
   ODataProperty,
+  ODataReturnType,
   ODataSchema,
 } from "./metadata/types"
 
 const navigationPropertiesConstant = "[Constant.navigationProperties]"
+const functionsConstant = "[Constant.functions]"
 
-function getType(property: ODataProperty): string | WriterFunction {
+function getType(
+  property: ODataProperty | ODataReturnType,
+): string | WriterFunction {
   const type = property.isCollection ? `${property.type}[]` : property.type
   return property.isNullable ? Writers.unionType(type, "null") : type
 }
@@ -166,6 +172,59 @@ function getEnumInterface(
   }
 }
 
+function getFunctionParameter(
+  parameter: ODataParameter,
+): OptionalKind<ParameterDeclarationStructure> {
+  return {
+    name: parameter.name,
+    type: getType(parameter),
+  }
+}
+
+function getFunctionInterface(
+  func: ODataFunction,
+): OptionalKind<InterfaceDeclarationStructure> {
+  return {
+    name: func.name,
+    callSignatures: [
+      {
+        parameters: func.parameters.map(getFunctionParameter),
+        returnType: getType(func.returnType),
+      },
+    ],
+    isExported: false,
+  }
+}
+
+function bindFunctions(
+  schemaFile: SourceFile,
+  functions: ODataFunction[],
+): void {
+  const boundFunctions = new Map<
+    string,
+    OptionalKind<PropertySignatureStructure>[]
+  >()
+
+  for (const func of functions) {
+    if (!("boundType" in func)) {
+      continue
+    }
+    const properties = boundFunctions.get(func.boundType.type) ?? []
+    boundFunctions.set(func.boundType.type, [
+      ...properties,
+      { name: func.name, type: func.name },
+    ])
+  }
+
+  for (const [namespacedType, properties] of boundFunctions.entries()) {
+    const [type] = namespacedType.split(".").reverse()
+    schemaFile.getInterfaceOrThrow(type).addProperty({
+      name: functionsConstant,
+      type: Writers.objectType({ properties }),
+    })
+  }
+}
+
 export function createSchemaFile(
   schema: ODataSchema,
   directory: Directory,
@@ -188,7 +247,10 @@ export function createSchemaFile(
   schemaFile.addInterfaces([
     ...schema.complexTypes.map(getEntityInterface),
     ...schema.entityTypes.map(getEntityInterface),
+    ...schema.functions.map(getFunctionInterface),
   ])
+
+  bindFunctions(schemaFile, schema.functions)
 
   return schemaFile.fixMissingImports().organizeImports()
 }
