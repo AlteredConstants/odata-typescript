@@ -11,7 +11,7 @@ const NumberFromXmlSchemaIntegerString = extendType(
     }
   },
   value => value.toString(),
-  "SimpleIntegerFromString",
+  "NumberFromXmlSchemaIntegerString",
 )
 
 const BooleanFromString = extendType(
@@ -55,128 +55,158 @@ const SingleOrCollectionTypeQualifiedName = t.brand(
   "SingleOrCollectionTypeQualifiedName",
 )
 
-const XmlODataPropertyCodec = t.type({
-  $: t.intersection([
-    t.type({
-      Name: SimpleIdentifier,
-      Type: SingleOrCollectionTypeQualifiedName,
-    }),
-    t.partial({
-      Nullable: BooleanFromString,
-    }),
-  ]),
-})
+const XmlODataPropertyCodec = t.type(
+  {
+    $: t.intersection([
+      t.type({
+        Name: SimpleIdentifier,
+        Type: SingleOrCollectionTypeQualifiedName,
+      }),
+      t.partial({
+        Nullable: BooleanFromString,
+      }),
+    ]),
+  },
+  "ODataProperty",
+)
 export type XmlODataProperty = t.TypeOf<typeof XmlODataPropertyCodec>
 
-const XmlODataNavigationPropertyCodec = t.type({
-  $: t.intersection([
-    t.type({
-      Name: SimpleIdentifier,
-      Type: SingleOrCollectionTypeQualifiedName,
-    }),
-    t.partial({
-      Nullable: BooleanFromString,
-    }),
-  ]),
-})
+const XmlODataNavigationPropertyCodec = t.type(
+  {
+    $: t.intersection([
+      t.type({
+        Name: SimpleIdentifier,
+        Type: SingleOrCollectionTypeQualifiedName,
+      }),
+      t.partial({
+        Nullable: BooleanFromString,
+      }),
+    ]),
+  },
+  "ODataNavigationProperty",
+)
 export type XmlODataNavigationProperty = t.TypeOf<
   typeof XmlODataNavigationPropertyCodec
 >
 
-const XmlODataEntityTypeCodec = t.intersection([
-  t.type({
-    $: t.type({
-      Name: SimpleIdentifier,
-    }),
-  }),
-  t.partial({
-    Property: t.array(XmlODataPropertyCodec),
-    NavigationProperty: t.array(XmlODataNavigationPropertyCodec),
-  }),
-])
-export type XmlODataEntityType = t.TypeOf<typeof XmlODataEntityTypeCodec>
-
-const XmlODataComplexTypeCodec = t.intersection([
-  t.type({
-    $: t.type({
-      Name: SimpleIdentifier,
-    }),
-  }),
-  t.partial({
-    Property: t.array(XmlODataPropertyCodec),
-    NavigationProperty: t.array(XmlODataNavigationPropertyCodec),
-  }),
-])
-export type XmlODataComplexType = t.TypeOf<typeof XmlODataComplexTypeCodec>
-
-const XmlODataEnumMemberCodec = t.type({
-  $: t.intersection([
+const XmlODataEntityTypeCodec = t.intersection(
+  [
     t.type({
-      Name: SimpleIdentifier,
+      $: t.type({
+        Name: SimpleIdentifier,
+      }),
     }),
     t.partial({
-      Value: NumberFromXmlSchemaIntegerString,
+      Property: t.array(XmlODataPropertyCodec),
+      NavigationProperty: t.array(XmlODataNavigationPropertyCodec),
     }),
-  ]),
-})
+  ],
+  "ODataEntityType",
+)
+export type XmlODataEntityType = t.TypeOf<typeof XmlODataEntityTypeCodec>
+
+const XmlODataComplexTypeCodec = t.intersection(
+  [
+    t.type({
+      $: t.type({
+        Name: SimpleIdentifier,
+      }),
+    }),
+    t.partial({
+      Property: t.array(XmlODataPropertyCodec),
+      NavigationProperty: t.array(XmlODataNavigationPropertyCodec),
+    }),
+  ],
+  "ODataComplexType",
+)
+export type XmlODataComplexType = t.TypeOf<typeof XmlODataComplexTypeCodec>
+
+const XmlODataEnumMemberCodec = t.type(
+  {
+    $: t.intersection([
+      t.type({
+        Name: SimpleIdentifier,
+      }),
+      t.partial({
+        Value: NumberFromXmlSchemaIntegerString,
+      }),
+    ]),
+  },
+  "ODataEnumMember",
+)
 export type XmlODataEnumMember = t.TypeOf<typeof XmlODataEnumMemberCodec>
 
-const XmlODataEnumTypeCodec = t.intersection([
-  t.type({
-    $: t.type({
-      Name: SimpleIdentifier,
+const XmlODataEnumTypeCodec = t.intersection(
+  [
+    t.type({
+      $: t.type({
+        Name: SimpleIdentifier,
+      }),
     }),
-  }),
-  t.partial({
-    Member: t.array(XmlODataEnumMemberCodec),
-  }),
-])
+    t.partial({
+      Member: t.array(XmlODataEnumMemberCodec),
+    }),
+  ],
+  "ODataEnumType",
+)
 export type XmlODataEnumType = t.TypeOf<typeof XmlODataEnumTypeCodec>
 
-const XmlODataEntitySetCodec = t.type({
-  $: t.type({
-    Name: SimpleIdentifier,
-    EntityType: QualifiedName,
-  }),
-})
-export type XmlODataEntitySet = t.TypeOf<typeof XmlODataEntitySetCodec>
-
-const XmlODataEntityContainerCodec = t.intersection([
-  t.type({
+const XmlODataEntitySetCodec = t.type(
+  {
     $: t.type({
       Name: SimpleIdentifier,
+      EntityType: QualifiedName,
     }),
-  }),
-  t.partial({
-    EntitySet: t.array(XmlODataEntitySetCodec),
-  }),
-])
+  },
+  "ODataEntitySet",
+)
+export type XmlODataEntitySet = t.TypeOf<typeof XmlODataEntitySetCodec>
+
+const XmlODataEntityContainerCodec = t.intersection(
+  [
+    t.type({
+      $: t.type({
+        Name: SimpleIdentifier,
+      }),
+    }),
+    t.partial({
+      EntitySet: t.array(XmlODataEntitySetCodec),
+    }),
+  ],
+  "ODataEntityContainer",
+)
 export type XmlODataEntityContainer = t.TypeOf<
   typeof XmlODataEntityContainerCodec
 >
 
-const XmlODataSchemaCodec = t.intersection([
-  t.type({
-    $: t.type({
-      Namespace: QualifiedName,
+const XmlODataSchemaCodec = t.intersection(
+  [
+    t.type({
+      $: t.type({
+        Namespace: QualifiedName,
+      }),
     }),
-  }),
-  t.partial({
-    ComplexType: t.array(XmlODataComplexTypeCodec),
-    EntityContainer: t.tuple([XmlODataEntityContainerCodec]),
-    EntityType: t.array(XmlODataEntityTypeCodec),
-    EnumType: t.array(XmlODataEnumTypeCodec),
-  }),
-])
+    t.partial({
+      ComplexType: t.array(XmlODataComplexTypeCodec),
+      EntityContainer: t.tuple([XmlODataEntityContainerCodec]),
+      EntityType: t.array(XmlODataEntityTypeCodec),
+      EnumType: t.array(XmlODataEnumTypeCodec),
+    }),
+  ],
+  "ODataSchema",
+)
 export type XmlODataSchema = t.TypeOf<typeof XmlODataSchemaCodec>
 
-export const XmlODataMetadataCodec = t.type({
-  "edmx:Edmx": t.type({
-    "edmx:DataServices": t.tuple([
-      t.type({
-        Schema: t.array(XmlODataSchemaCodec),
-      }),
-    ]),
-  }),
-})
+export const XmlODataMetadataCodec = t.type(
+  {
+    "edmx:Edmx": t.type({
+      "edmx:DataServices": t.tuple([
+        t.type({
+          Schema: t.array(XmlODataSchemaCodec),
+        }),
+      ]),
+    }),
+  },
+  "ODataMetadata",
+)
 export type XmlODataMetadata = t.TypeOf<typeof XmlODataMetadataCodec>
