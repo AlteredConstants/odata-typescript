@@ -106,10 +106,8 @@ function getFunction(functionType: XmlODataFunction): ODataFunction {
       throw new Error("Bound function missing binding parameter.")
     }
 
-    const bound: ODataBoundFunction = {
-      ...base,
-      boundType: getBaseAttributes(functionType.Parameter[0]),
-    }
+    const [boundType, ...parameters] = base.parameters
+    const bound: ODataBoundFunction = { ...base, boundType, parameters }
     return bound
   } else {
     const unbound: ODataUnboundFunction = base
