@@ -2,7 +2,6 @@ import {
   Directory,
   InterfaceDeclarationStructure,
   OptionalKind,
-  ParameterDeclarationStructure,
   PropertySignatureStructure,
   SourceFile,
   TypeAliasDeclarationStructure,
@@ -26,6 +25,7 @@ import {
 
 const navigationPropertiesConstant = "[Constant.navigationProperties]"
 const functionsConstant = "[Constant.functions]"
+const returnTypeConstant = "[Constant.returnType]"
 
 function getType(
   property: ODataProperty | ODataReturnType,
@@ -183,24 +183,16 @@ function getFunctionImportProperty(
   }
 }
 
-function getFunctionParameter(
-  parameter: ODataParameter,
-): OptionalKind<ParameterDeclarationStructure> {
-  return {
-    name: parameter.name,
-    type: getType(parameter),
-  }
-}
-
 function getFunctionInterface(
   func: ODataFunction,
 ): OptionalKind<InterfaceDeclarationStructure> {
   return {
     name: func.name,
-    callSignatures: [
+    properties: [
+      ...func.parameters.map(getProperty),
       {
-        parameters: func.parameters.map(getFunctionParameter),
-        returnType: getType(func.returnType),
+        name: returnTypeConstant,
+        type: getType(func.returnType),
       },
     ],
     isExported: true,
