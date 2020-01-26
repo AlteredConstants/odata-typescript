@@ -20,7 +20,7 @@ function getBuildDirectory(project: Project): Directory {
   return buildDirectory
 }
 
-async function run(metadataFilePath: string): Promise<void> {
+async function run(metadataFilePaths: string[]): Promise<void> {
   removeSync(buildPath)
 
   const project = new Project({
@@ -28,15 +28,19 @@ async function run(metadataFilePath: string): Promise<void> {
   })
   const buildDirectory = getBuildDirectory(project)
 
-  const metadata = await parse(metadataFilePath)
-
-  const schemas = metadata.schemas.filter(
-    schema =>
-      schema.entityTypes.length ||
-      schema.complexTypes.length ||
-      schema.enumTypes.length ||
-      schema.entityContainer,
+  const metadata = await Promise.all(
+    metadataFilePaths.map(async path => parse(path)),
   )
+
+  const schemas = metadata
+    .flatMap(m => m.schemas)
+    .filter(
+      schema =>
+        schema.entityTypes.length ||
+        schema.complexTypes.length ||
+        schema.enumTypes.length ||
+        schema.entityContainer,
+    )
 
   for (const schema of schemas) {
     createSchemaFile(schema, buildDirectory)
@@ -46,4 +50,4 @@ async function run(metadataFilePath: string): Promise<void> {
 }
 
 // eslint-disable-next-line no-console
-run(process.argv[2]).catch(error => console.error(error))
+run(process.argv.slice(2)).catch(error => console.error(error))
