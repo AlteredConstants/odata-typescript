@@ -19,7 +19,6 @@ import {
   ODataFunctionImport,
   ODataParameter,
   ODataProperty,
-  ODataReturnType,
   ODataSchema,
 } from "./metadata/types"
 
@@ -27,31 +26,45 @@ const navigationPropertiesConstant = "[Constant.navigationProperties]"
 const functionsConstant = "[Constant.functions]"
 const returnTypeConstant = "[Constant.returnType]"
 
-function getType(
-  property: ODataProperty | ODataReturnType,
-): string | WriterFunction {
-  const type = property.isCollection ? `${property.type}[]` : property.type
-  return property.isNullable ? Writers.unionType(type, "null") : type
+/**
+ * http://docs.oasis-open.org/odata/odata-csdl-xml/v4.01/cs01/odata-csdl-xml-v4.01-cs01.html#sec_StructuralProperty
+ *
+ * http://docs.oasis-open.org/odata/odata-csdl-xml/v4.01/cs01/odata-csdl-xml-v4.01-cs01.html#sec_Parameter
+ */
+function getStructuralPropertyOrParameter(
+  property: ODataProperty | ODataParameter,
+): OptionalKind<PropertySignatureStructure> {
+  const type = property.isCollection ? `Array<${property.type}>` : property.type
+  return {
+    name: property.name,
+    type: property.isNullable ? Writers.unionType(type, "null") : type,
+  }
 }
 
-function getProperty(
-  property: ODataProperty | ODataParameter,
+/** http://docs.oasis-open.org/odata/odata-csdl-xml/v4.01/cs01/odata-csdl-xml-v4.01-cs01.html#sec_NavigationProperty */
+function getNavigationProperty(
+  property: ODataProperty,
 ): OptionalKind<PropertySignatureStructure> {
   return {
     name: property.name,
-    type: getType(property),
+    // Collection types aren't allowed to be null.
+    type: property.isCollection
+      ? `Array<${property.type}>`
+      : property.isNullable
+      ? Writers.unionType(property.type, "null")
+      : property.type,
   }
 }
 
 function getEntityProperties(
   entity: ODataEntity,
 ): OptionalKind<PropertySignatureStructure>[] {
-  const properties = entity.properties.map(getProperty)
+  const properties = entity.properties.map(getStructuralPropertyOrParameter)
   if (entity.navigationProperties.length) {
     properties.push({
       name: navigationPropertiesConstant,
       type: Writers.objectType({
-        properties: entity.navigationProperties.map(getProperty),
+        properties: entity.navigationProperties.map(getNavigationProperty),
       }),
     })
   }
@@ -186,13 +199,20 @@ function getFunctionImportProperty(
 function getFunctionInterface(
   func: ODataFunction,
 ): OptionalKind<InterfaceDeclarationStructure> {
+  // Nullable attribute applies to the value of the collection:
+  // http://docs.oasis-open.org/odata/odata-csdl-xml/v4.01/cs01/odata-csdl-xml-v4.01-cs01.html#sec_ReturnType
+  const baseReturnType = func.returnType.isNullable
+    ? `${func.returnType.type} | null`
+    : func.returnType.type
   return {
     name: func.name,
     properties: [
-      ...func.parameters.map(getProperty),
+      ...func.parameters.map(getStructuralPropertyOrParameter),
       {
         name: returnTypeConstant,
-        type: getType(func.returnType),
+        type: func.returnType.isCollection
+          ? `Array<${baseReturnType}>`
+          : baseReturnType,
       },
     ],
     isExported: true,
