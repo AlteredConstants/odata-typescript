@@ -73,7 +73,7 @@ function getEntitySetProperty(
 ): OptionalKind<PropertySignatureStructure> {
   return {
     name: entitySet.name,
-    type: `${entitySet.type}[]`,
+    type: `ODataEntityCollection<${entitySet.type}>`,
   }
 }
 
