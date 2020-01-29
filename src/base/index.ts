@@ -4,7 +4,17 @@ import * as Edm from "./Edm"
 export { Constant, Edm }
 
 export interface ODataEntityCollection<T> {
-  "@count"?: number
+  "@odata.count"?: number
   value: T[]
-  "@nextLink"?: string
+  "@odata.nextLink"?: string
+}
+
+export interface ODataNavigationPropertyCollectionConfiguration<
+  Entity,
+  CountProperty extends string,
+  NextLinkProperty extends string
+> {
+  value: Array<Entity>
+  countProperty: CountProperty
+  nextLinkProperty: NextLinkProperty
 }

@@ -26,6 +26,10 @@ const navigationPropertiesConstant = "[Constant.navigationProperties]"
 const functionsConstant = "[Constant.functions]"
 const returnTypeConstant = "[Constant.returnType]"
 
+const entityCollectionTypeName = "ODataEntityCollection"
+const navigationPropertyConfigTypeName =
+  "ODataNavigationPropertyCollectionConfiguration"
+
 /**
  * http://docs.oasis-open.org/odata/odata-csdl-xml/v4.01/cs01/odata-csdl-xml-v4.01-cs01.html#sec_StructuralProperty
  *
@@ -49,7 +53,7 @@ function getNavigationProperty(
     name: property.name,
     // Collection types aren't allowed to be null.
     type: property.isCollection
-      ? `Array<${property.type}>`
+      ? `${navigationPropertyConfigTypeName}<${property.type}, "${property.name}@odata.count", "${property.name}@odata.nextLink">`
       : property.isNullable
       ? Writers.unionType(property.type, "null")
       : property.type,
@@ -86,7 +90,7 @@ function getEntitySetProperty(
 ): OptionalKind<PropertySignatureStructure> {
   return {
     name: entitySet.name,
-    type: `ODataEntityCollection<${entitySet.type}>`,
+    type: `${entityCollectionTypeName}<${entitySet.type}>`,
   }
 }
 
