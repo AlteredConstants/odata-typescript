@@ -1,380 +1,360 @@
-import { chain, map } from "fp-ts/lib/Either"
-import { pipe } from "fp-ts/lib/pipeable"
-import * as t from "io-ts"
-import { extendType } from "io-ts-promise"
+import { isLeft, map } from "fp-ts/Either"
+import { pipe } from "fp-ts/function"
+import * as C from "io-ts/Codec"
+import * as D from "io-ts/Decoder"
+import * as G from "io-ts/Guard"
 
-const NumberFromXmlSchemaIntegerString = extendType(
-  t.string,
-  (value) => {
-    if (/^[+-]?\d+$/.test(value)) {
-      return Number(value)
-    } else {
-      throw new Error(`Value "${value}" is not a valid XML Schema integer.`)
-    }
-  },
-  (value) => value.toString(),
-  "NumberFromXmlSchemaIntegerString",
+const NumberFromXmlSchemaIntegerString = C.make(
+  pipe(
+    D.string,
+    D.parse((value) => {
+      if (/^[+-]?\d+$/.test(value)) {
+        return D.success(Number(value))
+      } else {
+        return D.failure(value, "Not a valid XML Schema integer.")
+      }
+    }),
+  ),
+  { encode: String },
 )
 
-const BooleanFromString = extendType(
-  t.keyof({ true: null, false: null }),
-  (value) => value === "true",
-  (value) => (value ? "true" : "false"),
-  "BooleanFromString",
+const BooleanFromString = C.make(
+  pipe(
+    D.literal("true", "false"),
+    D.parse((value) => D.success(value === "true")),
+  ),
+  { encode: String },
 )
 
-const True = new t.Type<true, boolean, boolean>(
-  "True",
-  (value): value is true => value === true,
-  (value, context) => (value ? t.success(value) : t.failure(value, context)),
-  t.identity,
+const TrueFromString = pipe(
+  BooleanFromString,
+  C.refine((value): value is true => value === true, "True"),
 )
-const TrueFromString = BooleanFromString.pipe(True, "TrueFromString")
 
-const False = new t.Type<false, boolean, boolean>(
-  "False",
-  (value): value is false => value === false,
-  (value, context) => (!value ? t.success(value) : t.failure(value, context)),
-  t.identity,
+const FalseFromString = pipe(
+  BooleanFromString,
+  C.refine((value): value is false => value === false, "False"),
 )
-const FalseFromString = BooleanFromString.pipe(False, "FalseFromString")
 
 const simpleIdentifierRegExp = /^[_\p{L}\p{Nl}](?:[_\p{L}\p{Nl}\p{Nd}\p{Mn}\p{Mc}\p{Pc}\p{Cf}])*$/u
 interface SimpleIdentifierBrand {
   readonly SimpleIdentifier: unique symbol
 }
-const SimpleIdentifier = t.brand(
-  t.string,
-  (value): value is t.Branded<string, SimpleIdentifierBrand> =>
+const SimpleIdentifierGuard = pipe(
+  G.string,
+  G.refine((value): value is string & SimpleIdentifierBrand =>
     simpleIdentifierRegExp.test(value),
-  "SimpleIdentifier",
+  ),
+)
+const SimpleIdentifier = C.fromDecoder(
+  D.fromGuard(SimpleIdentifierGuard, "SimpleIdentifier"),
 )
 
 interface QualifiedNameBrand {
   readonly QualifiedName: unique symbol
 }
-const QualifiedName = t.brand(
-  t.string,
-  (value): value is t.Branded<string, QualifiedNameBrand> =>
-    value.split(".").every((part) => SimpleIdentifier.is(part)),
-  "QualifiedName",
+const QualifiedName = pipe(
+  C.string,
+  C.refine(
+    (value): value is string & QualifiedNameBrand =>
+      value.split(".").every(SimpleIdentifierGuard.is),
+    "QualifiedName",
+  ),
 )
 
-const TypeInfo = t.type({ name: t.string, isCollection: t.boolean })
-const SingleOrCollectionTypeQualifiedName = new t.Type<
-  t.TypeOf<typeof TypeInfo>,
-  unknown,
-  unknown
->(
-  "SingleOrCollectionTypeQualifiedName",
-  TypeInfo.is,
-  (value, context) => {
-    return pipe(
-      t.string.validate(value, context),
-      chain((stringValue) => {
-        const matches = /^Collection\((.+)\)$/.exec(stringValue)
-        const baseType = matches ? matches[1] : stringValue
-        return pipe(
-          QualifiedName.validate(baseType, context),
-          map((name) => ({ name, isCollection: !!matches })),
-        )
-      }),
-    )
-  },
-  (value) => (value.isCollection ? `Collection(${value.name})` : value.name),
-)
-
-const XmlODataPropertyCodec = t.type(
+const SingleOrCollectionTypeQualifiedName = C.make(
+  pipe(
+    D.string,
+    D.parse((value) => {
+      const matches = value.match(/^Collection\((.+)\)$/)
+      const baseType = matches ? matches[1] : value
+      return pipe(
+        QualifiedName.decode(baseType),
+        map((name) => ({ isCollection: !!matches, name })),
+      )
+    }),
+  ),
   {
-    $: t.intersection([
-      t.type({
-        Name: SimpleIdentifier,
-        Type: SingleOrCollectionTypeQualifiedName,
-      }),
-      t.partial({
+    encode: (value) =>
+      value.isCollection ? `Collection(${value.name})` : value.name,
+  },
+)
+
+const XmlODataPropertyDecoder = D.type({
+  $: pipe(
+    D.type({
+      Name: SimpleIdentifier,
+      Type: SingleOrCollectionTypeQualifiedName,
+    }),
+    D.intersect(
+      D.partial({
         Nullable: BooleanFromString,
       }),
-    ]),
-  },
-  "ODataProperty",
-)
-export type XmlODataProperty = t.TypeOf<typeof XmlODataPropertyCodec>
+    ),
+  ),
+})
+export type XmlODataProperty = D.TypeOf<typeof XmlODataPropertyDecoder>
 
-const XmlODataNavigationPropertyCodec = t.type(
-  {
-    $: t.intersection([
-      t.type({
-        Name: SimpleIdentifier,
-        Type: SingleOrCollectionTypeQualifiedName,
-      }),
-      t.partial({
+const XmlODataNavigationPropertyDecoder = D.type({
+  $: pipe(
+    D.type({
+      Name: SimpleIdentifier,
+      Type: SingleOrCollectionTypeQualifiedName,
+    }),
+    D.intersect(
+      D.partial({
         Nullable: BooleanFromString,
       }),
-    ]),
-  },
-  "ODataNavigationProperty",
-)
-export type XmlODataNavigationProperty = t.TypeOf<
-  typeof XmlODataNavigationPropertyCodec
+    ),
+  ),
+})
+export type XmlODataNavigationProperty = D.TypeOf<
+  typeof XmlODataNavigationPropertyDecoder
 >
 
-const XmlODataEntityTypeCodec = t.intersection(
-  [
-    t.type({
-      $: t.type({
-        Name: SimpleIdentifier,
-      }),
+const XmlODataEntityTypeDecoder = pipe(
+  D.type({
+    $: D.type({
+      Name: SimpleIdentifier,
     }),
-    t.partial({
-      Property: t.array(XmlODataPropertyCodec),
-      NavigationProperty: t.array(XmlODataNavigationPropertyCodec),
+  }),
+  D.intersect(
+    D.partial({
+      Property: D.array(XmlODataPropertyDecoder),
+      NavigationProperty: D.array(XmlODataNavigationPropertyDecoder),
     }),
-  ],
-  "ODataEntityType",
+  ),
 )
-export type XmlODataEntityType = t.TypeOf<typeof XmlODataEntityTypeCodec>
+export type XmlODataEntityType = D.TypeOf<typeof XmlODataEntityTypeDecoder>
 
-const XmlODataComplexTypeCodec = t.intersection(
-  [
-    t.type({
-      $: t.type({
-        Name: SimpleIdentifier,
-      }),
+const XmlODataComplexTypeDecoder = pipe(
+  D.type({
+    $: D.type({
+      Name: SimpleIdentifier,
     }),
-    t.partial({
-      Property: t.array(XmlODataPropertyCodec),
-      NavigationProperty: t.array(XmlODataNavigationPropertyCodec),
+  }),
+  D.intersect(
+    D.partial({
+      Property: D.array(XmlODataPropertyDecoder),
+      NavigationProperty: D.array(XmlODataNavigationPropertyDecoder),
     }),
-  ],
-  "ODataComplexType",
+  ),
 )
-export type XmlODataComplexType = t.TypeOf<typeof XmlODataComplexTypeCodec>
+export type XmlODataComplexType = D.TypeOf<typeof XmlODataComplexTypeDecoder>
 
-const XmlODataEnumMemberCodec = t.type(
-  {
-    $: t.intersection([
-      t.type({
-        Name: SimpleIdentifier,
-      }),
-      t.partial({
+const XmlODataEnumMemberDecoder = D.type({
+  $: pipe(
+    D.type({
+      Name: SimpleIdentifier,
+    }),
+    D.intersect(
+      D.partial({
         Value: NumberFromXmlSchemaIntegerString,
       }),
-    ]),
-  },
-  "ODataEnumMember",
-)
-export type XmlODataEnumMember = t.TypeOf<typeof XmlODataEnumMemberCodec>
+    ),
+  ),
+})
+export type XmlODataEnumMember = D.TypeOf<typeof XmlODataEnumMemberDecoder>
 
-const XmlODataEnumTypeCodec = t.intersection(
-  [
-    t.type({
-      $: t.type({
-        Name: SimpleIdentifier,
-      }),
+const XmlODataEnumTypeDecoder = pipe(
+  D.type({
+    $: D.type({
+      Name: SimpleIdentifier,
     }),
-    t.partial({
-      Member: t.array(XmlODataEnumMemberCodec),
+  }),
+  D.intersect(
+    D.partial({
+      Member: D.array(XmlODataEnumMemberDecoder),
     }),
-  ],
-  "ODataEnumType",
+  ),
 )
-export type XmlODataEnumType = t.TypeOf<typeof XmlODataEnumTypeCodec>
+export type XmlODataEnumType = D.TypeOf<typeof XmlODataEnumTypeDecoder>
 
-const XmlODataParameterCodec = t.type(
-  {
-    $: t.intersection([
-      t.type({
-        Name: SimpleIdentifier,
-        Type: SingleOrCollectionTypeQualifiedName,
-      }),
-      t.partial({
+const XmlODataParameterDecoder = D.type({
+  $: pipe(
+    D.type({
+      Name: SimpleIdentifier,
+      Type: SingleOrCollectionTypeQualifiedName,
+    }),
+    D.intersect(
+      D.partial({
         Nullable: BooleanFromString,
       }),
-    ]),
-  },
-  "ODataParameter",
-)
-export type XmlODataParameter = t.TypeOf<typeof XmlODataParameterCodec>
+    ),
+  ),
+})
+export type XmlODataParameter = D.TypeOf<typeof XmlODataParameterDecoder>
 
-const XmlODataReturnTypeCodec = t.type(
-  {
-    $: t.intersection([
-      t.type({
-        Type: SingleOrCollectionTypeQualifiedName,
-      }),
-      t.partial({
+const XmlODataReturnTypeDecoder = D.type({
+  $: pipe(
+    D.type({
+      Type: SingleOrCollectionTypeQualifiedName,
+    }),
+    D.intersect(
+      D.partial({
         Nullable: BooleanFromString,
       }),
-    ]),
-  },
-  "ODataReturnType",
-)
-export type XmlODataReturnType = t.TypeOf<typeof XmlODataReturnTypeCodec>
+    ),
+  ),
+})
+export type XmlODataReturnType = D.TypeOf<typeof XmlODataReturnTypeDecoder>
 
-const XmlODataBoundActionCodec = t.intersection(
-  [
-    t.type({
-      $: t.type({
-        Name: SimpleIdentifier,
-        IsBound: TrueFromString,
-      }),
-      Parameter: t.array(XmlODataParameterCodec),
-    }),
-    t.partial({
-      ReturnType: t.tuple([XmlODataReturnTypeCodec]),
-    }),
-  ],
-  "ODataBoundAction",
-)
-
-const XmlODataUnboundActionCodec = t.intersection(
-  [
-    t.type({
-      $: t.intersection([
-        t.type({
-          Name: SimpleIdentifier,
-        }),
-        t.partial({
-          IsBound: FalseFromString,
-        }),
-      ]),
-    }),
-    t.partial({
-      Parameter: t.array(XmlODataParameterCodec),
-      ReturnType: t.tuple([XmlODataReturnTypeCodec]),
-    }),
-  ],
-  "ODataUnboundAction",
-)
-
-const XmlODataActionCodec = t.union([
-  XmlODataBoundActionCodec,
-  XmlODataUnboundActionCodec,
-])
-export type XmlODataAction = t.TypeOf<typeof XmlODataActionCodec>
-
-const XmlODataBoundFunctionCodec = t.type(
-  {
-    $: t.type({
+const XmlODataBoundActionDecoder = pipe(
+  D.type({
+    $: D.type({
       Name: SimpleIdentifier,
       IsBound: TrueFromString,
     }),
-    Parameter: t.array(XmlODataParameterCodec),
-    ReturnType: t.tuple([XmlODataReturnTypeCodec]),
-  },
-  "ODataBoundFunction",
+    Parameter: D.array(XmlODataParameterDecoder),
+  }),
+  D.intersect(
+    D.partial({
+      ReturnType: D.tuple(XmlODataReturnTypeDecoder),
+    }),
+  ),
 )
 
-const XmlODataUnboundFunctionCodec = t.intersection(
-  [
-    t.type({
-      $: t.intersection([
-        t.type({
-          Name: SimpleIdentifier,
-        }),
-        t.partial({
-          IsBound: FalseFromString,
-        }),
-      ]),
-      ReturnType: t.tuple([XmlODataReturnTypeCodec]),
-    }),
-    t.partial({
-      Parameter: t.array(XmlODataParameterCodec),
-    }),
-  ],
-  "ODataUnboundFunction",
-)
-
-const XmlODataFunctionCodec = t.union([
-  XmlODataBoundFunctionCodec,
-  XmlODataUnboundFunctionCodec,
-])
-export type XmlODataFunction = t.TypeOf<typeof XmlODataFunctionCodec>
-
-const XmlODataEntitySetCodec = t.type(
-  {
-    $: t.type({
-      Name: SimpleIdentifier,
-      EntityType: QualifiedName,
-    }),
-  },
-  "ODataEntitySet",
-)
-export type XmlODataEntitySet = t.TypeOf<typeof XmlODataEntitySetCodec>
-
-const XmlODataActionImportCodec = t.type(
-  {
-    $: t.type({
-      Name: SimpleIdentifier,
-      Action: QualifiedName,
-    }),
-  },
-  "ODataActionImport",
-)
-export type XmlODataActionImport = t.TypeOf<typeof XmlODataActionImportCodec>
-
-const XmlODataFunctionImportCodec = t.type(
-  {
-    $: t.type({
-      Name: SimpleIdentifier,
-      Function: QualifiedName,
-    }),
-  },
-  "ODataFunctionImport",
-)
-export type XmlODataFunctionImport = t.TypeOf<
-  typeof XmlODataFunctionImportCodec
->
-
-const XmlODataEntityContainerCodec = t.intersection(
-  [
-    t.type({
-      $: t.type({
+const XmlODataUnboundActionDecoder = pipe(
+  D.type({
+    $: pipe(
+      D.type({
         Name: SimpleIdentifier,
       }),
+      D.intersect(
+        D.partial({
+          IsBound: FalseFromString,
+        }),
+      ),
+    ),
+  }),
+  D.intersect(
+    D.partial({
+      Parameter: D.array(XmlODataParameterDecoder),
+      ReturnType: D.tuple(XmlODataReturnTypeDecoder),
     }),
-    t.partial({
-      EntitySet: t.array(XmlODataEntitySetCodec),
-      ActionImport: t.array(XmlODataActionImportCodec),
-      FunctionImport: t.array(XmlODataFunctionImportCodec),
-    }),
-  ],
-  "ODataEntityContainer",
+  ),
 )
-export type XmlODataEntityContainer = t.TypeOf<
-  typeof XmlODataEntityContainerCodec
+
+const XmlODataActionDecoder = D.union(
+  XmlODataBoundActionDecoder,
+  XmlODataUnboundActionDecoder,
+)
+export type XmlODataAction = D.TypeOf<typeof XmlODataActionDecoder>
+
+const XmlODataBoundFunctionDecoder = D.type({
+  $: D.type({
+    Name: SimpleIdentifier,
+    IsBound: TrueFromString,
+  }),
+  Parameter: D.array(XmlODataParameterDecoder),
+  ReturnType: D.tuple(XmlODataReturnTypeDecoder),
+})
+
+const XmlODataUnboundFunctionDecoder = pipe(
+  D.type({
+    $: pipe(
+      D.type({
+        Name: SimpleIdentifier,
+      }),
+      D.intersect(
+        D.partial({
+          IsBound: FalseFromString,
+        }),
+      ),
+    ),
+    ReturnType: D.tuple(XmlODataReturnTypeDecoder),
+  }),
+  D.intersect(
+    D.partial({
+      Parameter: D.array(XmlODataParameterDecoder),
+    }),
+  ),
+)
+
+const XmlODataFunctionDecoder = D.union(
+  XmlODataBoundFunctionDecoder,
+  XmlODataUnboundFunctionDecoder,
+)
+export type XmlODataFunction = D.TypeOf<typeof XmlODataFunctionDecoder>
+
+const XmlODataEntitySetDecoder = D.type({
+  $: D.type({
+    Name: SimpleIdentifier,
+    EntityType: QualifiedName,
+  }),
+})
+export type XmlODataEntitySet = D.TypeOf<typeof XmlODataEntitySetDecoder>
+
+const XmlODataActionImportDecoder = D.type({
+  $: D.type({
+    Name: SimpleIdentifier,
+    Action: QualifiedName,
+  }),
+})
+export type XmlODataActionImport = D.TypeOf<typeof XmlODataActionImportDecoder>
+
+const XmlODataFunctionImportDecoder = D.type({
+  $: D.type({
+    Name: SimpleIdentifier,
+    Function: QualifiedName,
+  }),
+})
+export type XmlODataFunctionImport = D.TypeOf<
+  typeof XmlODataFunctionImportDecoder
 >
 
-const XmlODataSchemaCodec = t.intersection(
-  [
-    t.type({
-      $: t.type({
-        Namespace: QualifiedName,
-      }),
+const XmlODataEntityContainerDecoder = pipe(
+  D.type({
+    $: D.type({
+      Name: SimpleIdentifier,
     }),
-    t.partial({
-      ComplexType: t.array(XmlODataComplexTypeCodec),
-      EntityContainer: t.tuple([XmlODataEntityContainerCodec]),
-      EntityType: t.array(XmlODataEntityTypeCodec),
-      EnumType: t.array(XmlODataEnumTypeCodec),
-      Action: t.array(XmlODataActionCodec),
-      Function: t.array(XmlODataFunctionCodec),
+  }),
+  D.intersect(
+    D.partial({
+      EntitySet: D.array(XmlODataEntitySetDecoder),
+      ActionImport: D.array(XmlODataActionImportDecoder),
+      FunctionImport: D.array(XmlODataFunctionImportDecoder),
     }),
-  ],
-  "ODataSchema",
+  ),
 )
-export type XmlODataSchema = t.TypeOf<typeof XmlODataSchemaCodec>
+export type XmlODataEntityContainer = D.TypeOf<
+  typeof XmlODataEntityContainerDecoder
+>
 
-export const XmlODataMetadataCodec = t.type(
-  {
-    "edmx:Edmx": t.type({
-      "edmx:DataServices": t.tuple([
-        t.type({
-          Schema: t.array(XmlODataSchemaCodec),
-        }),
-      ]),
+const XmlODataSchemaDecoder = pipe(
+  D.type({
+    $: D.type({
+      Namespace: QualifiedName,
     }),
-  },
-  "ODataMetadata",
+  }),
+  D.intersect(
+    D.partial({
+      ComplexType: D.array(XmlODataComplexTypeDecoder),
+      EntityContainer: D.tuple(XmlODataEntityContainerDecoder),
+      EntityType: D.array(XmlODataEntityTypeDecoder),
+      EnumType: D.array(XmlODataEnumTypeDecoder),
+      Action: D.array(XmlODataActionDecoder),
+      Function: D.array(XmlODataFunctionDecoder),
+    }),
+  ),
 )
-export type XmlODataMetadata = t.TypeOf<typeof XmlODataMetadataCodec>
+export type XmlODataSchema = D.TypeOf<typeof XmlODataSchemaDecoder>
+
+const XmlODataMetadataDecoder = D.type({
+  "edmx:Edmx": D.type({
+    "edmx:DataServices": D.tuple(
+      D.type({
+        Schema: D.array(XmlODataSchemaDecoder),
+      }),
+    ),
+  }),
+})
+export type XmlODataMetadata = D.TypeOf<typeof XmlODataMetadataDecoder>
+
+export function decodeXmlODataMetadata(value: unknown): XmlODataMetadata {
+  const result = XmlODataMetadataDecoder.decode(value)
+  if (isLeft(result)) {
+    throw new Error(`Metadata XML is not valid:\n${D.draw(result.left)}`)
+  }
+  return result.right
+}

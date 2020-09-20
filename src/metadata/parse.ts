@@ -1,11 +1,10 @@
 import fs from "fs"
-import { decode } from "io-ts-promise"
 import { promisify } from "util"
 import { parseString as parseXmlString } from "xml2js"
 
 import { transformMetadata } from "./transform-metadata"
 import { ODataMetadata } from "./types"
-import { XmlODataMetadataCodec } from "./xml-types"
+import { decodeXmlODataMetadata } from "./xml-types"
 
 const readFile = promisify(fs.readFile)
 
@@ -21,6 +20,6 @@ async function parseXmlFile(path: string): Promise<unknown> {
 
 export async function parse(path: string): Promise<ODataMetadata> {
   const parsed = await parseXmlFile(path)
-  const decoded = await decode(XmlODataMetadataCodec, parsed)
+  const decoded = decodeXmlODataMetadata(parsed)
   return transformMetadata(decoded)
 }
