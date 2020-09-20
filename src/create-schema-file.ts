@@ -115,12 +115,12 @@ function addNamespaceExport(
   namespaceSegment: string,
 ): void {
   const exportDeclaration =
-    indexFile.getExportDeclaration(d => !d.hasModuleSpecifier()) ??
+    indexFile.getExportDeclaration((d) => !d.hasModuleSpecifier()) ??
     indexFile.addExportDeclaration({})
 
   const namedExportExists = exportDeclaration
     .getNamedExports()
-    .some(specifier => specifier.getName() === namespaceSegment)
+    .some((specifier) => specifier.getName() === namespaceSegment)
 
   if (!namedExportExists) {
     exportDeclaration.addNamedExport({ name: namespaceSegment })
@@ -169,7 +169,7 @@ function getEnumMembersType(
     firstMemberNameType,
     secondMemberNameType,
     ...remainingMemberNameTypes
-  ] = members.map(member => `"${member.name}"`)
+  ] = members.map((member) => `"${member.name}"`)
 
   if (!firstMemberNameType) {
     return "string"

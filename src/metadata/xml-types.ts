@@ -5,21 +5,21 @@ import { extendType } from "io-ts-promise"
 
 const NumberFromXmlSchemaIntegerString = extendType(
   t.string,
-  value => {
+  (value) => {
     if (/^[+-]?\d+$/.test(value)) {
       return Number(value)
     } else {
       throw new Error(`Value "${value}" is not a valid XML Schema integer.`)
     }
   },
-  value => value.toString(),
+  (value) => value.toString(),
   "NumberFromXmlSchemaIntegerString",
 )
 
 const BooleanFromString = extendType(
   t.keyof({ true: null, false: null }),
-  value => value === "true",
-  value => (value ? "true" : "false"),
+  (value) => value === "true",
+  (value) => (value ? "true" : "false"),
   "BooleanFromString",
 )
 
@@ -56,7 +56,7 @@ interface QualifiedNameBrand {
 const QualifiedName = t.brand(
   t.string,
   (value): value is t.Branded<string, QualifiedNameBrand> =>
-    value.split(".").every(part => SimpleIdentifier.is(part)),
+    value.split(".").every((part) => SimpleIdentifier.is(part)),
   "QualifiedName",
 )
 
@@ -71,17 +71,17 @@ const SingleOrCollectionTypeQualifiedName = new t.Type<
   (value, context) => {
     return pipe(
       t.string.validate(value, context),
-      chain(stringValue => {
+      chain((stringValue) => {
         const matches = /^Collection\((.+)\)$/.exec(stringValue)
         const baseType = matches ? matches[1] : stringValue
         return pipe(
           QualifiedName.validate(baseType, context),
-          map(name => ({ name, isCollection: !!matches })),
+          map((name) => ({ name, isCollection: !!matches })),
         )
       }),
     )
   },
-  value => (value.isCollection ? `Collection(${value.name})` : value.name),
+  (value) => (value.isCollection ? `Collection(${value.name})` : value.name),
 )
 
 const XmlODataPropertyCodec = t.type(

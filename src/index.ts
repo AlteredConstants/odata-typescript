@@ -29,13 +29,13 @@ async function run(metadataFilePaths: string[]): Promise<void> {
   const buildDirectory = getBuildDirectory(project)
 
   const metadata = await Promise.all(
-    metadataFilePaths.map(async path => parse(path)),
+    metadataFilePaths.map(async (path) => parse(path)),
   )
 
   const schemas = metadata
-    .flatMap(m => m.schemas)
+    .flatMap((m) => m.schemas)
     .filter(
-      schema =>
+      (schema) =>
         schema.entityTypes.length ||
         schema.complexTypes.length ||
         schema.enumTypes.length ||
@@ -50,4 +50,4 @@ async function run(metadataFilePaths: string[]): Promise<void> {
 }
 
 // eslint-disable-next-line no-console
-run(process.argv.slice(2)).catch(error => console.error(error))
+run(process.argv.slice(2)).catch((error) => console.error(error))
