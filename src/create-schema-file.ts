@@ -10,6 +10,8 @@ import {
 } from "ts-morph"
 
 import {
+  ODataAction,
+  ODataActionImport,
   ODataEntity,
   ODataEntityContainer,
   ODataEntitySet,
@@ -19,6 +21,7 @@ import {
   ODataFunctionImport,
   ODataParameter,
   ODataProperty,
+  ODataReturnType,
   ODataSchema,
 } from "./metadata/types"
 
@@ -191,55 +194,66 @@ function getEnumInterface(
   }
 }
 
-function getFunctionImportProperty(
-  functionImport: ODataFunctionImport,
+function getActionOrFunctionImportProperty(
+  actionImport: ODataActionImport | ODataFunctionImport,
 ): OptionalKind<PropertySignatureStructure> {
   return {
-    name: functionImport.name,
-    type: functionImport.functionName,
+    name: actionImport.name,
+    type:
+      "actionName" in actionImport
+        ? actionImport.actionName
+        : actionImport.functionName,
   }
 }
 
-function getFunctionInterface(
-  func: ODataFunction,
-): OptionalKind<InterfaceDeclarationStructure> {
+function getReturnType(returnType: ODataReturnType): string {
   // Nullable attribute applies to the value of the collection:
   // http://docs.oasis-open.org/odata/odata-csdl-xml/v4.01/cs01/odata-csdl-xml-v4.01-cs01.html#sec_ReturnType
-  const baseReturnType = func.returnType.isNullable
-    ? `${func.returnType.type} | null`
-    : func.returnType.type
+  const baseReturnType = returnType.isNullable
+    ? `${returnType.type} | null`
+    : returnType.type
+
+  return returnType.isCollection ? `Array<${baseReturnType}>` : baseReturnType
+}
+
+function getActionOrFunctionInterface(
+  action: ODataAction | ODataFunction,
+): OptionalKind<InterfaceDeclarationStructure> {
+  const parameterProperties = action.parameters.map(
+    getStructuralPropertyOrParameter,
+  )
   return {
-    name: func.name,
-    properties: [
-      ...func.parameters.map(getStructuralPropertyOrParameter),
-      {
-        name: returnTypeConstant,
-        type: func.returnType.isCollection
-          ? `Array<${baseReturnType}>`
-          : baseReturnType,
-      },
-    ],
+    name: action.name,
+    properties: action.returnType
+      ? [
+          ...parameterProperties,
+          {
+            name: returnTypeConstant,
+            type: getReturnType(action.returnType),
+          },
+        ]
+      : parameterProperties,
     isExported: true,
   }
 }
 
-function bindFunctions(
+function bindActionsOrFunctions(
   schemaFile: SourceFile,
-  functions: ODataFunction[],
+  actions: Array<ODataAction | ODataFunction>,
 ): void {
   const boundFunctions = new Map<
     string,
     OptionalKind<PropertySignatureStructure>[]
   >()
 
-  for (const func of functions) {
-    if (!("boundType" in func)) {
+  for (const action of actions) {
+    if (!("boundType" in action)) {
       continue
     }
-    const properties = boundFunctions.get(func.boundType.type) ?? []
-    boundFunctions.set(func.boundType.type, [
+    const properties = boundFunctions.get(action.boundType.type) ?? []
+    boundFunctions.set(action.boundType.type, [
       ...properties,
-      { name: func.name, type: func.name },
+      { name: action.name, type: action.name },
     ])
   }
 
@@ -256,16 +270,20 @@ function getContainerProperties(
   entityContainer: ODataEntityContainer,
 ): OptionalKind<PropertySignatureStructure>[] {
   const properties = entityContainer.entitySets.map(getEntitySetProperty)
-  if (entityContainer.functionImports.length) {
+
+  const imports = [
+    ...entityContainer.actionImports,
+    ...entityContainer.functionImports,
+  ]
+  if (imports.length) {
     properties.push({
       name: functionsConstant,
       type: Writers.objectType({
-        properties: entityContainer.functionImports.map(
-          getFunctionImportProperty,
-        ),
+        properties: imports.map(getActionOrFunctionImportProperty),
       }),
     })
   }
+
   return properties
 }
 
@@ -291,10 +309,11 @@ export function createSchemaFile(
   schemaFile.addInterfaces([
     ...schema.complexTypes.map(getEntityInterface),
     ...schema.entityTypes.map(getEntityInterface),
-    ...schema.functions.map(getFunctionInterface),
+    ...schema.actions.map(getActionOrFunctionInterface),
+    ...schema.functions.map(getActionOrFunctionInterface),
   ])
 
-  bindFunctions(schemaFile, schema.functions)
+  bindActionsOrFunctions(schemaFile, [...schema.actions, ...schema.functions])
 
   return schemaFile.fixMissingImports().organizeImports()
 }

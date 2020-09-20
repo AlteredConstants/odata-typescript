@@ -211,6 +211,48 @@ const XmlODataReturnTypeCodec = t.type(
 )
 export type XmlODataReturnType = t.TypeOf<typeof XmlODataReturnTypeCodec>
 
+const XmlODataBoundActionCodec = t.intersection(
+  [
+    t.type({
+      $: t.type({
+        Name: SimpleIdentifier,
+        IsBound: TrueFromString,
+      }),
+      Parameter: t.array(XmlODataParameterCodec),
+    }),
+    t.partial({
+      ReturnType: t.tuple([XmlODataReturnTypeCodec]),
+    }),
+  ],
+  "ODataBoundAction",
+)
+
+const XmlODataUnboundActionCodec = t.intersection(
+  [
+    t.type({
+      $: t.intersection([
+        t.type({
+          Name: SimpleIdentifier,
+        }),
+        t.partial({
+          IsBound: FalseFromString,
+        }),
+      ]),
+    }),
+    t.partial({
+      Parameter: t.array(XmlODataParameterCodec),
+      ReturnType: t.tuple([XmlODataReturnTypeCodec]),
+    }),
+  ],
+  "ODataUnboundAction",
+)
+
+const XmlODataActionCodec = t.union([
+  XmlODataBoundActionCodec,
+  XmlODataUnboundActionCodec,
+])
+export type XmlODataAction = t.TypeOf<typeof XmlODataActionCodec>
+
 const XmlODataBoundFunctionCodec = t.type(
   {
     $: t.type({
@@ -260,6 +302,17 @@ const XmlODataEntitySetCodec = t.type(
 )
 export type XmlODataEntitySet = t.TypeOf<typeof XmlODataEntitySetCodec>
 
+const XmlODataActionImportCodec = t.type(
+  {
+    $: t.type({
+      Name: SimpleIdentifier,
+      Action: QualifiedName,
+    }),
+  },
+  "ODataActionImport",
+)
+export type XmlODataActionImport = t.TypeOf<typeof XmlODataActionImportCodec>
+
 const XmlODataFunctionImportCodec = t.type(
   {
     $: t.type({
@@ -282,6 +335,7 @@ const XmlODataEntityContainerCodec = t.intersection(
     }),
     t.partial({
       EntitySet: t.array(XmlODataEntitySetCodec),
+      ActionImport: t.array(XmlODataActionImportCodec),
       FunctionImport: t.array(XmlODataFunctionImportCodec),
     }),
   ],
@@ -303,6 +357,7 @@ const XmlODataSchemaCodec = t.intersection(
       EntityContainer: t.tuple([XmlODataEntityContainerCodec]),
       EntityType: t.array(XmlODataEntityTypeCodec),
       EnumType: t.array(XmlODataEnumTypeCodec),
+      Action: t.array(XmlODataActionCodec),
       Function: t.array(XmlODataFunctionCodec),
     }),
   ],

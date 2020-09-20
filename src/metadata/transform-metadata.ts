@@ -1,4 +1,7 @@
 import {
+  ODataAction,
+  ODataActionImport,
+  ODataBoundAction,
   ODataBoundFunction,
   ODataEntity,
   ODataEntityContainer,
@@ -11,9 +14,12 @@ import {
   ODataParameter,
   ODataProperty,
   ODataSchema,
+  ODataUnboundAction,
   ODataUnboundFunction,
 } from "./types"
 import {
+  XmlODataAction,
+  XmlODataActionImport,
   XmlODataComplexType,
   XmlODataEntityContainer,
   XmlODataEntitySet,
@@ -91,6 +97,30 @@ function getParameter(parameter: XmlODataParameter): ODataParameter {
   }
 }
 
+function getAction(action: XmlODataAction): ODataAction {
+  const returnType = action.ReturnType?.[0]
+  const base = {
+    name: action.$.Name,
+    parameters: action.Parameter?.map(getParameter) ?? [],
+    returnType: returnType ? getBaseAttributes(returnType) : null,
+  }
+
+  if (action.$.IsBound) {
+    if (!action.Parameter) {
+      // This should never happen since the codec checks for this.
+      // Unfortunately, discriminated unions don't work from in nested objects.
+      throw new Error("Bound action missing binding parameter.")
+    }
+
+    const [boundType, ...parameters] = base.parameters
+    const bound: ODataBoundAction = { ...base, boundType, parameters }
+    return bound
+  } else {
+    const unbound: ODataUnboundAction = base
+    return unbound
+  }
+}
+
 function getFunction(functionType: XmlODataFunction): ODataFunction {
   const returnType = functionType.ReturnType[0]
   const base = {
@@ -122,6 +152,13 @@ function getEntitySet(set: XmlODataEntitySet): ODataEntitySet {
   }
 }
 
+function getActionImport(value: XmlODataActionImport): ODataActionImport {
+  return {
+    name: value.$.Name,
+    actionName: value.$.Action,
+  }
+}
+
 function getFunctionImport(value: XmlODataFunctionImport): ODataFunctionImport {
   return {
     name: value.$.Name,
@@ -135,6 +172,7 @@ function getEntityContainer(
   return {
     name: container.$.Name,
     entitySets: container.EntitySet?.map(getEntitySet) ?? [],
+    actionImports: container.ActionImport?.map(getActionImport) ?? [],
     functionImports: container.FunctionImport?.map(getFunctionImport) ?? [],
   }
 }
@@ -145,6 +183,7 @@ function getSchema(schema: XmlODataSchema): ODataSchema {
     entityTypes: schema.EntityType?.map(getEntity) ?? [],
     complexTypes: schema.ComplexType?.map(getEntity) ?? [],
     enumTypes: schema.EnumType?.map(getEnum) ?? [],
+    actions: schema.Action?.map(getAction) ?? [],
     functions: schema.Function?.map(getFunction) ?? [],
     entityContainer: schema.EntityContainer
       ? getEntityContainer(schema.EntityContainer[0])

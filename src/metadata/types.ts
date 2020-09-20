@@ -34,6 +34,22 @@ export interface ODataParameter {
   isNullable: boolean
 }
 
+export interface ODataUnboundAction {
+  name: string
+  parameters: ODataParameter[]
+  returnType: ODataReturnType | null
+}
+
+export interface ODataBoundAction extends ODataUnboundAction {
+  boundType: {
+    type: string
+    isCollection: boolean
+    isNullable: boolean
+  }
+}
+
+export type ODataAction = ODataUnboundAction | ODataBoundAction
+
 export interface ODataUnboundFunction {
   name: string
   parameters: ODataParameter[]
@@ -55,6 +71,11 @@ export interface ODataEntitySet {
   type: string
 }
 
+export interface ODataActionImport {
+  name: string
+  actionName: string
+}
+
 export interface ODataFunctionImport {
   name: string
   functionName: string
@@ -63,6 +84,7 @@ export interface ODataFunctionImport {
 export interface ODataEntityContainer {
   name: string
   entitySets: ODataEntitySet[]
+  actionImports: ODataActionImport[]
   functionImports: ODataFunctionImport[]
 }
 
@@ -71,6 +93,7 @@ export interface ODataSchema {
   entityTypes: ODataEntity[]
   complexTypes: ODataEntity[]
   enumTypes: ODataEnum[]
+  actions: ODataAction[]
   functions: ODataFunction[]
   entityContainer: ODataEntityContainer | null
 }
